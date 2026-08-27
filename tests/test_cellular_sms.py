@@ -640,7 +640,8 @@ class CellularSmsTests(unittest.TestCase):
         """PC/SC stores lowercase hex; ModemManager often returns the same ICCID in uppercase."""
         modem = "/org/freedesktop/ModemManager1/Modem/0"
         sim = "/org/freedesktop/ModemManager1/SIM/0"
-        sms = "/org/freedesktop/ModemManager1/SMS/7"
+        inbound = "/org/freedesktop/ModemManager1/SMS/7"
+        created = "/org/freedesktop/ModemManager1/SMS/41"
         stored = "89000000000000abcd"
         from_mm = "89000000000000ABCD"
 
@@ -654,12 +655,12 @@ class CellularSmsTests(unittest.TestCase):
             if args == ["mmcli", "-m", modem, "--messaging-status", "--output-json"]:
                 return Result("{}")
             if "--messaging-create-sms=number=6700" in args:
-                return Result(json.dumps({"modem": {"messaging": {"created-sms": sms}}}))
-            if args == ["mmcli", "-s", sms, "--send", "--output-json"]:
+                return Result(json.dumps({"modem": {"messaging": {"created-sms": created}}}))
+            if args == ["mmcli", "-s", created, "--send", "--output-json"]:
                 return Result("{}")
             if args == ["mmcli", "-m", modem, "--messaging-list-sms", "--output-json"]:
-                return Result(json.dumps({"modem.messaging.sms": [sms]}))
-            if args == ["mmcli", "-s", sms, "--output-json"]:
+                return Result(json.dumps({"modem.messaging.sms": [inbound]}))
+            if args == ["mmcli", "-s", inbound, "--output-json"]:
                 return Result(json.dumps({"sms": {
                     "content": {"number": "+44123", "text": "hello"},
                     "properties": {"pdu-type": "deliver",

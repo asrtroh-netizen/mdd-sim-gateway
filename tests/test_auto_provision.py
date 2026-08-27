@@ -471,7 +471,7 @@ class VowifiOffCardSwapRecoveryTests(unittest.IsolatedAsyncioTestCase):
         self.card = {
             "present": True, "index": 4, "name": "VoWiFi Modem modem-a 00 01",
             "hardware_kind": "modem", "hardware_id": "modem-a", "reader_port": "",
-            "imsi": "234330123456780", "mcc": "234", "mnc": "33",
+            "imsi": "234331234567890", "mcc": "234", "mnc": "33",
             "iccid": "89000000000000000022", "smsc": "+447700900111",
             "pin_enabled": False,
             "virtual_slots": [
