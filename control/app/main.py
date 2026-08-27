@@ -32,7 +32,7 @@ from . import config as cfg
 from . import (store, engine, status as status_mod, sim, card, notify_push, lpa, auth,
                estkme, usbreader, egress, device_state, operations, update_check, cellular_sms,
                sysinfo, failover, carrier_id, allowance, cellular_call, sms_pdu, ussd,
-               identity)
+               identity, modem_engineering)
 from .version import VERSION
 from .ami import AmiClient
 from .runtime import RuntimeRegistry
@@ -3561,9 +3561,12 @@ async def _unified_devices() -> list[dict]:
         if is_cellular_target:
             if host_cell.get("available"):
                 registration = str(host_cell.get("registration") or "unknown").lower()
-                radio_on = bool(actual_state.get("cellular_radio_enabled",
-                                                 host_cell.get("radio_enabled",
-                                                               host_cell.get("powered"))))
+                live_radio = modem_engineering.radio_from_snapshot(host_cell, actual_state)
+                if live_radio is not None:
+                    radio_on = live_radio
+                else:
+                    radio_on = bool(actual_state.get("cellular_radio_enabled",
+                                                     host_cell.get("powered")))
                 registered = registration in {"home", "roaming", "registered"}
                 if not cell_desired and host_cell.get("data_active"):
                     cell_actual = "stopping"
@@ -3587,6 +3590,13 @@ async def _unified_devices() -> list[dict]:
                     "tx_bytes": int(host_cell.get("tx_bytes") or 0),
                     "profile": host_cell.get("profile") or "",
                     "interface": host_cell.get("network_interface") or "",
+                    "radio_enabled": radio_on,
+                    "rsrp": host_cell.get("rsrp"),
+                    "rsrq": host_cell.get("rsrq"),
+                    "sinr": host_cell.get("sinr"),
+                    "access_tech": host_cell.get("access_tech") or "",
+                    "band": host_cell.get("band") or "",
+                    "channel": host_cell.get("channel"),
                 }
             elif cell_desired:
                 if shared.get("error"):
@@ -3794,6 +3804,107 @@ async def api_device_cellular(device_id: str):
         raise HTTPException(404, "no such physical device")
     return {"device_id": device_id, "capability": device["capabilities"]["cellular"],
             "cellular": device.get("cellular")}
+
+
+def _modem_device_or_400(device: dict | None) -> dict:
+    if not device:
+        raise HTTPException(404, "no such physical device")
+    if device.get("device_type") == "reader":
+        raise HTTPException(400, "a smart-card reader has no cellular radio")
+    return device
+
+
+def _modem_path_or_409(device_id: str) -> str:
+    path = modem_engineering.modem_path_for_device(device_id)
+    if not path:
+        raise HTTPException(409, "the cellular modem is not visible to ModemManager")
+    return path
+
+
+@app.get("/api/devices/{device_id}/at")
+async def api_device_at_history(device_id: str):
+    device = next((item for item in await _unified_devices() if item["id"] == device_id), None)
+    _modem_device_or_400(device)
+    return {"device_id": device_id, "history": modem_engineering.history_for(device_id)}
+
+
+@app.post("/api/devices/{device_id}/at")
+async def api_device_at(device_id: str, body: dict):
+    device = next((item for item in await _unified_devices() if item["id"] == device_id), None)
+    _modem_device_or_400(device)
+    path = _modem_path_or_409(device_id)
+    command = str((body or {}).get("command") or "")
+    result = await asyncio.to_thread(modem_engineering.send_at, path, command)
+    if result.get("stage") == "validate":
+        raise HTTPException(400, result.get("error") or "invalid AT command")
+    modem_engineering.record_history(
+        device_id, result.get("command") or "",
+        result.get("response") or result.get("error") or "",
+        ok=bool(result.get("ok")))
+    result["history"] = modem_engineering.history_for(device_id)
+    return result
+
+
+@app.post("/api/devices/{device_id}/ussd")
+async def api_device_ussd(device_id: str, body: dict):
+    device = next((item for item in await _unified_devices() if item["id"] == device_id), None)
+    _modem_device_or_400(device)
+    path = _modem_path_or_409(device_id)
+    code = str((body or {}).get("code") or (body or {}).get("ussd") or "")
+    result = await asyncio.to_thread(modem_engineering.send_ussd, path, code)
+    if result.get("stage") == "validate":
+        raise HTTPException(400, result.get("error") or "invalid USSD code")
+    return result
+
+
+@app.post("/api/devices/{device_id}/operators/scan")
+async def api_device_operator_scan(device_id: str):
+    device = next((item for item in await _unified_devices() if item["id"] == device_id), None)
+    _modem_device_or_400(device)
+    path = _modem_path_or_409(device_id)
+    return await asyncio.to_thread(modem_engineering.scan_operators, path)
+
+
+@app.post("/api/devices/{device_id}/operators/select")
+async def api_device_operator_select(device_id: str, body: dict):
+    device = next((item for item in await _unified_devices() if item["id"] == device_id), None)
+    _modem_device_or_400(device)
+    path = _modem_path_or_409(device_id)
+    result = await asyncio.to_thread(
+        modem_engineering.select_operator, path,
+        mode=str((body or {}).get("mode") or ""),
+        plmn=str((body or {}).get("plmn") or (body or {}).get("operator") or ""))
+    if result.get("stage") == "validate":
+        raise HTTPException(400, result.get("error") or "invalid operator selection")
+    return result
+
+
+@app.get("/api/devices/{device_id}/usbnet")
+async def api_device_usbnet(device_id: str):
+    device = next((item for item in await _unified_devices() if item["id"] == device_id), None)
+    _modem_device_or_400(device)
+    path = _modem_path_or_409(device_id)
+    return await asyncio.to_thread(modem_engineering.usbnet_status, path)
+
+
+@app.put("/api/devices/{device_id}/usbnet")
+async def api_device_usbnet_set(device_id: str, body: dict):
+    device = next((item for item in await _unified_devices() if item["id"] == device_id), None)
+    _modem_device_or_400(device)
+    path = _modem_path_or_409(device_id)
+    mode = (body or {}).get("mode", (body or {}).get("usbnet"))
+    result = await asyncio.to_thread(modem_engineering.set_usbnet, path, mode)
+    if result.get("stage") == "validate":
+        raise HTTPException(400, result.get("error") or "invalid USB net mode")
+    return result
+
+
+@app.post("/api/devices/{device_id}/restart")
+async def api_device_restart(device_id: str):
+    device = next((item for item in await _unified_devices() if item["id"] == device_id), None)
+    _modem_device_or_400(device)
+    path = _modem_path_or_409(device_id)
+    return await asyncio.to_thread(modem_engineering.restart_modem, path)
 
 
 @app.post("/api/devices/{device_id}/diagnostics")

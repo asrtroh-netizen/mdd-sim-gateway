@@ -4,6 +4,16 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Modem engineering panel on the existing 4G / hardware pages: AT terminal with redacted
+  history, module-side USSD (`AT+CUSD` / ModemManager 3GPP USSD), live RSRP/RSRQ/SINR,
+  access technology, band and channel, network scan plus automatic/manual operator select,
+  USB net composition, and a modem restart that waits for live radio state.
+
+- Cellular service codes on the softphone now use the module USSD path instead of being
+  refused or dialled as a voice call. VoWiFi service codes are unchanged (IMS / 3GPP 24.390).
+
 ### Fixed
 
 - Cellular SMS send no longer depends on `mmcli --messaging-create-sms-with-text`. On
@@ -20,6 +30,9 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
   toggles stay greyed out. The existing line is rebound to the new ICCID, a complete draft
   is promoted without starting the engine, and the VoWiFi switch stays usable so the
   operator can recover from the UI.
+
+- Flight mode, USB net composition and modem restart now publish the module readback.
+  A successful write is no longer shown as ON while the radio is still off.
 
 ## [1.5.2] - 2026-08-26
 

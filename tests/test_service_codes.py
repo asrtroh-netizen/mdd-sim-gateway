@@ -69,8 +69,10 @@ class BrowserDiallerServiceCodeTests(unittest.TestCase):
         self.assertIn("const localField = LOCAL_MMI[target]", self.view)
 
     def test_service_codes_never_reach_the_cellular_voice_backend(self):
-        # The cellular path dials a voice call; a service code needs AT+CUSD instead.
+        # The cellular path dials a voice call; a service code uses AT+CUSD instead.
         self.assertIn("if (isServiceCode(target)) {", self.view)
+        self.assertIn("api.deviceUssd(selectedDevice.id, target)", self.view)
+        self.assertNotIn("Service codes can only be dialled over VoWiFi, not the cellular modem.", self.view)
 
     def test_a_locally_rejected_code_is_not_blamed_on_the_carrier(self):
         # The dialplan records a call the moment its pattern matches, so an absent record
