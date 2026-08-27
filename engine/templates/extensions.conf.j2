@@ -1,8 +1,10 @@
 {% set local_eps = [] %}
 {% if webrtc_enable %}{% set _ = local_eps.append('PJSIP/' ~ webrtc_user) %}{% endif %}
+{% for acc in sip_external | default([]) %}{% set _ = local_eps.append('PJSIP/' ~ acc.username) %}{% endfor %}
 {% set dialstr = local_eps | join('&') %}
 {% set msg_targets = [] %}
 {% if webrtc_enable %}{% set _ = msg_targets.append(webrtc_user) %}{% endif %}
+{% for acc in sip_external | default([]) %}{% set _ = msg_targets.append(acc.username) %}{% endfor %}
 {# Match every non-empty printable extension without Asterisk's noisy bare `_.` wildcard.
    The leading ASCII character set preserves UUID/GRUU, SIP/TEL and short-code users; the
    trailing `!` allows the original one-character minimum and is safe in these request-driven

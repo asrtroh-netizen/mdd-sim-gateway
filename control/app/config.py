@@ -26,14 +26,154 @@ DATA_DIR = os.environ.get("MDD_DATA", os.path.join(os.getcwd(), "data"))
 CONFIG_PATH = os.path.join(DATA_DIR, "config.yaml")
 _lock = threading.RLock()
 
-# Product safety boundary. This is intentionally a source-level limit rather than an environment
-# variable: operators must not be able to turn the gateway into a bulk-SIM service by changing
-# deployment configuration.
-MAX_SIM_LINES = 5
+# Product safety boundary. The default five-line cap and the three remote-control locks stay
+# forced-off unless the host-local $MDD_DATA/local.yaml (or a Settings save that writes it)
+# raises them. An absolute ceiling still prevents this box from becoming a bulk SIM farm.
+DEFAULT_MAX_SIM_LINES = 5
+ABSOLUTE_MAX_SIM_LINES = 32
+MAX_SIM_LINES = DEFAULT_MAX_SIM_LINES
+LOCAL_KEYS = (
+    "max_sim_lines",
+    "allow_external_sip",
+    "allow_telegram_commands",
+    "persist_asterisk_debug",
+)
+_SIP_EXTERNAL_USER = re.compile(r"[A-Za-z][A-Za-z0-9_.-]{0,31}")
 
 
 class LineLimitError(ValueError):
     pass
+
+
+def local_path() -> str:
+    return os.path.join(DATA_DIR, "local.yaml")
+
+
+def _as_bool(value, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "yes", "on", "1"}:
+            return True
+        if lowered in {"false", "no", "off", "0"}:
+            return False
+    return default
+
+
+def _as_max_sim_lines(value) -> int:
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_SIM_LINES
+    if count < 1:
+        return DEFAULT_MAX_SIM_LINES
+    return min(count, ABSOLUTE_MAX_SIM_LINES)
+
+
+def load_local() -> dict:
+    """Resolved host-local overrides. A missing or unreadable file keeps product defaults."""
+    raw: dict = {}
+    path = local_path()
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as handle:
+                loaded = yaml.safe_load(handle) or {}
+            if isinstance(loaded, dict):
+                raw = loaded
+        except (OSError, yaml.YAMLError):
+            raw = {}
+    return {
+        "max_sim_lines": _as_max_sim_lines(raw.get("max_sim_lines", DEFAULT_MAX_SIM_LINES)),
+        "allow_external_sip": _as_bool(raw.get("allow_external_sip", False)),
+        "allow_telegram_commands": _as_bool(raw.get("allow_telegram_commands", False)),
+        "persist_asterisk_debug": _as_bool(raw.get("persist_asterisk_debug", False)),
+    }
+
+
+def save_local(patch: dict) -> dict:
+    """Merge and atomically write $MDD_DATA/local.yaml (0600)."""
+    current = load_local()
+    if "max_sim_lines" in patch:
+        current["max_sim_lines"] = _as_max_sim_lines(patch.get("max_sim_lines"))
+    for key in ("allow_external_sip", "allow_telegram_commands", "persist_asterisk_debug"):
+        if key in patch:
+            current[key] = _as_bool(patch.get(key))
+    _private_dir(DATA_DIR)
+    path = local_path()
+    tmp = path + ".tmp"
+    with _private_text_writer(tmp) as handle:
+        yaml.safe_dump(current, handle, sort_keys=False)
+    os.replace(tmp, path)
+    os.chmod(path, 0o600)
+    return current
+
+
+def max_sim_lines() -> int:
+    return load_local()["max_sim_lines"]
+
+
+def allow_external_sip() -> bool:
+    return load_local()["allow_external_sip"]
+
+
+def allow_telegram_commands() -> bool:
+    return load_local()["allow_telegram_commands"]
+
+
+def persist_asterisk_debug() -> bool:
+    return load_local()["persist_asterisk_debug"]
+
+
+def sanitize_sip_external(accounts) -> list:
+    """Keep only well-formed local SIP accounts. Usernames become PJSIP section names."""
+    if not isinstance(accounts, list):
+        return []
+    out = []
+    seen: set[str] = set()
+    for item in accounts:
+        if not isinstance(item, dict):
+            continue
+        username = str(item.get("username") or "").strip()
+        password = str(item.get("password") or "")
+        if not _SIP_EXTERNAL_USER.fullmatch(username) or not password or username in seen:
+            continue
+        transport = str(item.get("transport") or "udp").strip().lower()
+        if transport not in {"udp", "tcp", "tls"}:
+            transport = "udp"
+        seen.add(username)
+        out.append({"username": username, "password": password, "transport": transport})
+    return out
+
+
+def apply_asterisk_debug(base: dict | None, requested: dict | None = None) -> dict:
+    """Merge debug flags; force Asterisk SIP tracing off unless local.yaml keeps it."""
+    out = {**(base or {})}
+    if requested:
+        out.update(requested)
+    if persist_asterisk_debug():
+        out["asterisk"] = bool(out.get("asterisk"))
+    else:
+        out["asterisk"] = False
+    return out
+
+
+def _apply_local_settings(settings: dict, local: dict | None = None) -> dict:
+    """Project host-local flags onto the in-memory settings object the API returns."""
+    flags = local if local is not None else load_local()
+    for key in LOCAL_KEYS:
+        settings[key] = flags[key]
+    if flags["allow_telegram_commands"]:
+        commands = settings.get("telegram", {}).get("commands")
+        if not isinstance(commands, dict):
+            settings.setdefault("telegram", {})["commands"] = {"enabled": True}
+        else:
+            commands.setdefault("enabled", True)
+    else:
+        (settings.get("telegram") or {}).pop("commands", None)
+    return settings
 
 
 def _private_dir(path: str) -> None:
@@ -291,9 +431,11 @@ def load() -> dict:
             # preserve its hidden checkbox forever when loading a pre-keepalive config.
             merged["events"].pop("activation_reminder", None)
             out["settings"][key] = merged
-        # Telegram is notification-only. Drop command settings left by an older configuration
-        # so an upgrade cannot preserve a remote call/SMS control channel.
-        out["settings"]["telegram"].pop("commands", None)
+        local = load_local()
+        # Telegram stays notification-only unless the host-local file (or Settings) unlocks
+        # commands. Drop a leftover commands block so an upgrade cannot keep a remote
+        # call/SMS channel by accident.
+        _apply_local_settings(out["settings"], local)
         # One private deployment previously appeared as a product-level "Universal Push"
         # preset. Present it as the ordinary custom webhook it really is, preserving its URL,
         # source field and token header. Saving Settings persists the standard representation.
@@ -417,14 +559,15 @@ def load() -> dict:
         }
         # Asterisk debug includes complete SIP messages and IMS identities.  Older manual
         # provisioning forms accidentally enabled it by default, so normalize every loaded
-        # line as well as new writes; this makes an upgrade safe before the operator next edits
-        # the line and prevents a stale saved value from reaching an engine restart.
+        # line as well as new writes unless the host-local persist flag is on.
         out["instances"] = deepcopy(data.get("instances", {}))
         for inst in out["instances"].values():
-            inst["debug"] = {**(inst.get("debug") or {}), "asterisk": False}
-            # Browser WebRTC remains available through the authenticated Web UI, but the
-            # the product never provisions standalone SIP accounts.
-            (inst.setdefault("sip", {}))["external"] = []
+            inst["debug"] = apply_asterisk_debug(inst.get("debug"))
+            sip = inst.setdefault("sip", {})
+            if local["allow_external_sip"]:
+                sip["external"] = sanitize_sip_external(sip.get("external"))
+            else:
+                sip["external"] = []
         out["internal"] = data.get("internal", {})
         return out
 
@@ -451,9 +594,39 @@ def get_settings() -> dict:
     return load()["settings"]
 
 
+def prepare_settings_payload(body: dict) -> dict:
+    """Normalize a Settings PUT body: honor or strip Telegram commands with the local flag."""
+    body = dict(body or {})
+    allow_commands = body.get("allow_telegram_commands")
+    if allow_commands is None:
+        allow_commands = allow_telegram_commands()
+    telegram = body.get("telegram")
+    if not allow_commands:
+        if isinstance(telegram, dict):
+            telegram.pop("commands", None)
+    elif isinstance(telegram, dict):
+        commands = telegram.get("commands")
+        if not isinstance(commands, dict):
+            telegram["commands"] = {"enabled": True}
+        else:
+            commands.setdefault("enabled", True)
+    if "max_sim_lines" in body:
+        body["max_sim_lines"] = _as_max_sim_lines(body.get("max_sim_lines"))
+    return body
+
+
 def update_settings(patch: dict) -> dict:
+    patch = dict(patch or {})
+    local_patch = {key: patch.pop(key) for key in LOCAL_KEYS if key in patch}
+    nested = patch.pop("local", None)
+    if isinstance(nested, dict):
+        local_patch.update({key: nested[key] for key in LOCAL_KEYS if key in nested})
     data = load()
     data["settings"].update(patch)
+    if local_patch:
+        saved_local = save_local(local_patch)
+        for key in LOCAL_KEYS:
+            data["settings"][key] = saved_local[key]
     save(data)
     return data["settings"]
 
@@ -662,9 +835,10 @@ def _upsert_instance_locked(inst: dict, unique_name: bool = False) -> dict:
     # instances with a computed `status` and `has_pin`); never persist them to config.
     inst = {k: v for k, v in inst.items() if k not in ("status", "has_pin")}
     existing = data["instances"].get(iid, {})
-    if not existing and len(data["instances"]) >= MAX_SIM_LINES:
+    cap = max_sim_lines()
+    if not existing and len(data["instances"]) >= cap:
         raise LineLimitError(
-            f"MDD Sim Gateway supports at most {MAX_SIM_LINES} SIM lines")
+            f"MDD Sim Gateway supports at most {cap} SIM lines")
     if "index" not in existing:
         inst["index"] = next_index(data)
     else:
@@ -691,14 +865,16 @@ def _upsert_instance_locked(inst: dict, unique_name: bool = False) -> dict:
     merged = {**existing, **inst}
     # Production Asterisk debug can expose complete SIP messages and subscriber identities.
     # Diagnostic SIP logging is enabled briefly at runtime by the dedicated number-learning
-    # flow instead; it must never be persisted on a line.
-    merged["debug"] = {**(merged.get("debug") or {}), "asterisk": False}
+    # flow instead; it is persisted only when the host-local persist flag is on.
+    merged["debug"] = apply_asterisk_debug(merged.get("debug"))
     # Ensure a STABLE WebRTC softphone credential (used by both the Asterisk config and
     # the softphone provisioning endpoint — they must match).
     sip = merged.setdefault("sip", {})
-    # Ignore stale clients and hand-written API requests that try to restore remote SIP
-    # accounts. Only the authenticated browser softphone endpoint is rendered.
-    sip["external"] = []
+    # Standalone SIP accounts stay stripped unless local.yaml (or Settings) allows them.
+    if allow_external_sip():
+        sip["external"] = sanitize_sip_external(sip.get("external"))
+    else:
+        sip["external"] = []
     wr = sip.setdefault("webrtc", {})
     wr.setdefault("username", "webrtc")
     if not wr.get("password"):
@@ -712,11 +888,12 @@ def _upsert_instance_locked(inst: dict, unique_name: bool = False) -> dict:
 
 
 def line_allowed(iid: str) -> bool:
-    """Whether a saved line is inside the product's deterministic five-line set.
+    """Whether a saved line is inside the resolved SIM-line set.
 
-    Old/self-use installations may already contain more than five records. Keep their data so
-    an upgrade is non-destructive, but prevent every engine start path from using line six and
-    above. Existing UI order (`index`) wins; ids break ties deterministically.
+    Old/self-use installations may already contain more records than the current cap. Keep
+    their data so an upgrade is non-destructive, but prevent every engine start path from
+    using a line past the cap. Existing UI order (`index`) wins; ids break ties
+    deterministically. Without local.yaml the cap remains five.
     """
     def order(item: dict):
         try:
@@ -726,7 +903,7 @@ def line_allowed(iid: str) -> bool:
         return index, str(item.get("id") or "")
 
     allowed = {str(item.get("id")) for item in
-               sorted(list_instances(), key=order)[:MAX_SIM_LINES]}
+               sorted(list_instances(), key=order)[:max_sim_lines()]}
     return str(iid) in allowed
 
 
@@ -1041,7 +1218,7 @@ def render_instance_json(inst: dict, settings: dict) -> dict:
         "rtp_end": min(ports["rtp_end"], ports["rtp_start"] + rtp_span(ports) - 1),
         "sip": {
             "listen_addr": sip.get("listen_addr", "0.0.0.0"),
-            "external": [],
+            "external": sanitize_sip_external(sip.get("external")) if allow_external_sip() else [],
             "advertise_address": advertise_address(settings),
             # ICE host-candidate mappings require an IP literal even when PJSIP itself uses
             # the public TLS domain for signaling and SDP rewriting.
@@ -1074,8 +1251,9 @@ def render_instance_json(inst: dict, settings: dict) -> dict:
             },
         },
         # Defence in depth for instance.json files rendered from old or imported configs.
-        "debug": {**(settings.get("debug") or {}), **(inst.get("debug") or {}),
-                  "asterisk": False},
+        # Asterisk SIP tracing stays forced-off unless the host-local persist flag is on.
+        "debug": apply_asterisk_debug(
+            {**(settings.get("debug") or {}), **(inst.get("debug") or {})}),
         # Proactive CHILD-SA rekey period in minutes (0 = disabled). Per-line override
         # (inst.rekey_minutes) wins, else the global settings default, else 30. Clamped to 0
         # (off) or a sane 1..1440 window so a typo can't set an absurd sub-minute rekey storm.

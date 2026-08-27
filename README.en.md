@@ -71,7 +71,8 @@ When installation completes, open `https://<gateway-address>:8443` and create th
 - Show each modem UICC's three logical-channel allocations, roles and explicit failures.
 - Provide an authenticated browser softphone, SMS, call history, missed-call notifications and
   per-line local voicemail. Recordings remain on the gateway and are never attached to notifications
-  or support bundles; standalone SIP clients are not accepted.
+  or support bundles. Standalone SIP clients stay off unless this host enables
+  `allow_external_sip`.
 - Maintain reusable subscriptions, individual nodes and SOCKS5 proxies, then assign one to each
   country. sing-box owns the isolated TUNs; Xray-core carries Reality/XHTTP nodes. VoWiFi fails
   closed unless the selected exit passes a runtime UDP check.
@@ -79,7 +80,8 @@ When installation completes, open `https://<gateway-address>:8443` and create th
 - Check releases every six hours in the background. Choose automatic installation or notify-only,
   scoped to main releases or every release. Unattended installation still requires the exact version
   and earliest rollout time to be approved separately in `update-policy.json`.
-- Telegram is notification-only and does not accept remote control commands.
+- Telegram is notification-only by default; this host can enable `/status` `/sms`
+  `/call` `/hangup` against its own configured lines via `allow_telegram_commands`.
 - Manage eUICC profiles through a pinned local lpac build, including dual-SE readers.
 - Offer HTTPS, first-run administrator setup, persistent 12-hour or 30-day sessions, CSRF protection,
   login throttling, local backups, audit records, redacted support bundles and release checks.
@@ -119,7 +121,7 @@ See [installation](docs/INSTALL.md), [architecture](docs/ARCHITECTURE.md),
 
 ## Responsible use
 
-> **Compliance warning:** This software is only for use by the verified subscriber of a number where the carrier expressly permits that use. Do not use it for fraud, bulk or nuisance calling, marketing, verification-code collection, renting numbers or lines, call forwarding for others, concealing the controller's location, or providing telecommunications services to third parties. Users must follow local law, subscriber identity rules, and carrier terms. This project grants no telecom licence or carrier authorisation. MDD Sim Gateway stores and runs at most **five SIM lines** and provides neither standalone SIP accounts nor Telegram commands for calls, SMS, or hangup. Technical restrictions do not make any particular use lawful.
+> **Compliance warning:** This software is only for use by the verified subscriber of a number where the carrier expressly permits that use. Do not use it for fraud, bulk or nuisance calling, marketing, verification-code collection, renting numbers or lines, call forwarding for others, concealing the controller's location, or providing telecommunications services to third parties. Users must follow local law, subscriber identity rules, and carrier terms. This project grants no telecom licence or carrier authorisation. The default is at most **five SIM lines**, with no standalone SIP accounts and no Telegram commands. This host can raise those four limits through `$MDD_DATA/local.yaml` or System settings (line-cap ceiling 32); see [docs/LOCAL.md](docs/LOCAL.md). Technical restrictions do not make any particular use lawful.
 
 ## Community and feedback
 

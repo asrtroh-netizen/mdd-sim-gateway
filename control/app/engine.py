@@ -344,9 +344,13 @@ def start(inst: dict, settings: dict, dev_mounts: bool = False, reason: str = "r
         volumes[os.path.join(eng, "entrypoint.sh")] = {"bind": "/entrypoint.sh", "mode": "ro"}
         volumes[os.path.join(eng, "templates")] = {"bind": "/opt/mdd-sim-gateway/templates", "mode": "ro"}
 
-    # Expose only the authenticated browser softphone transport. Standalone
-    # SIP UDP/TCP/TLS listeners are not published to the host.
+    # Browser WebRTC is always published. Standalone SIP UDP/TCP/TLS listeners reach the
+    # host only when the host-local allow_external_sip flag is on.
     port_bindings = {f"{8089}/tcp": ports.get("webrtc", 8089)}
+    if cfg.allow_external_sip():
+        port_bindings["5060/udp"] = ports.get("sip_udp", 5060)
+        port_bindings["5060/tcp"] = ports.get("sip_udp", 5060)
+        port_bindings["5061/tcp"] = ports.get("sip_tls", 5061)
     # AMI grants system/command/originate. The manager dials the container bridge directly, so a
     # host mapping is unnecessary in normal operation and costs another docker-proxy. Keep the
     # loopback-only mapping as an explicit diagnostic option.
