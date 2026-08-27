@@ -21,8 +21,11 @@ async function j(method, path, body) {
   }
   // detail may be a structured dict (e.g. {code, message}); prefer its message so
   // alerts show readable text instead of "[object Object]".
-  const detailMsg = data.detail && typeof data.detail === 'object' ? data.detail.message : data.detail
-  if (!r.ok) throw Object.assign(new Error(detailMsg || data.error || r.statusText), { status: r.status, data })
+  const detail = data.detail && typeof data.detail === 'object' ? data.detail : null
+  const detailMsg = detail ? detail.message : data.detail
+  if (!r.ok) throw Object.assign(new Error(detailMsg || data.error || r.statusText), {
+    status: r.status, data, code: detail?.code,
+  })
   return data
 }
 
@@ -172,7 +175,11 @@ export const api = {
   // eSIM / LPA (lpac) — first arg is usually the PC/SC reader NAME (string).
   // Optional se_id / aid target a specific Secure Element on dual-SE cards.
   esimStatus: () => j('GET', '/api/esim/status'),
-  esimChip: (readerOrIndex, maybeName) => j('GET', `/api/esim/chip?${readerQuery(readerOrIndex, maybeName)}`),
+  esimChip: (readerOrIndex, maybeName, opts) => {
+    const q = readerQuery(readerOrIndex, maybeName)
+    if (opts && opts.stop) q.set('stop', 'true')
+    return j('GET', `/api/esim/chip?${q}`)
+  },
   esimChipCached: (readerOrIndex, maybeName) => j('GET', `/api/esim/chip/cached?${readerQuery(readerOrIndex, maybeName)}`),
   esimProfiles: (readerOrIndex, maybeName) => j('GET', `/api/esim/profiles?${readerQuery(readerOrIndex, maybeName)}`),
   esimEnable: (iccid, readerOrBody) => j(

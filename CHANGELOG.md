@@ -14,6 +14,14 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Cellular service codes on the softphone now use the module USSD path instead of being
   refused or dialled as a voice call. VoWiFi service codes are unchanged (IMS / 3GPP 24.390).
 
+- eSIM Load can stop VoWiFi on the same reader before lpac takes exclusive PC/SC.
+  Profile enable/switch then rebinds the same logical line to the new ICCID
+  (case-insensitive), rebuilds a draft if needed, and leaves VoWiFi off so the
+  operator turns it back on. A leftover foreign card is a recoverable
+  `card_mismatch` (409); LPA and a running engine cannot share a reader
+  (`reader_busy`). Chip info surfaces SAS / CI certificates that lpac already
+  returns in EUICCInfo2.
+
 ### Fixed
 
 - Cellular SMS send no longer depends on `mmcli --messaging-create-sms-with-text`. On

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
 from . import config as cfg
+from . import esim_lifecycle
 
 log = logging.getLogger("vowifi.lpa")
 
@@ -299,15 +300,17 @@ async def chip_info(reader_name: str, *, aid: str | None = None) -> dict:
     addrs = data.get("EuiccConfiguredAddresses") or {}
     info2 = data.get("EUICCInfo2") or {}
     ext = info2.get("extCardResource") or {}
+    certs = esim_lifecycle.chip_certificates(data)
     return {
         "eid": eid,
         "defaultDpAddress": addrs.get("defaultDpAddress"),
         "rootDsAddress": addrs.get("rootDsAddress"),
         "freeNonVolatileMemory": ext.get("freeNonVolatileMemory"),
         "freeVolatileMemory": ext.get("freeVolatileMemory"),
-        "sasAccreditationNumber": (
+        "sasAccreditationNumber": certs.get("sas") or (
             info2.get("sasAccreditationNumber") or info2.get("sasAcreditationNumber")
         ),
+        "certs": certs,
         "raw": data,
     }
 
