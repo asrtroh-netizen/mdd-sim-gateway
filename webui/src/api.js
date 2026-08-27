@@ -21,8 +21,11 @@ async function j(method, path, body) {
   }
   // detail may be a structured dict (e.g. {code, message}); prefer its message so
   // alerts show readable text instead of "[object Object]".
-  const detailMsg = data.detail && typeof data.detail === 'object' ? data.detail.message : data.detail
-  if (!r.ok) throw Object.assign(new Error(detailMsg || data.error || r.statusText), { status: r.status, data })
+  const detail = data.detail && typeof data.detail === 'object' ? data.detail : null
+  const detailMsg = detail ? detail.message : data.detail
+  if (!r.ok) throw Object.assign(new Error(detailMsg || data.error || r.statusText), {
+    status: r.status, data, code: detail?.code,
+  })
   return data
 }
 
@@ -66,6 +69,14 @@ export const api = {
   devices: () => j('GET', '/api/devices'),
   patchDeviceCapabilities: (id, patch) => j('PATCH', `/api/devices/${encodeURIComponent(id)}/capabilities`, patch),
   deviceCellular: (id) => j('GET', `/api/devices/${encodeURIComponent(id)}/cellular`),
+  deviceAtHistory: (id) => j('GET', `/api/devices/${encodeURIComponent(id)}/at`),
+  deviceAt: (id, command) => j('POST', `/api/devices/${encodeURIComponent(id)}/at`, { command }),
+  deviceUssd: (id, code) => j('POST', `/api/devices/${encodeURIComponent(id)}/ussd`, { code }),
+  deviceOperatorScan: (id) => j('POST', `/api/devices/${encodeURIComponent(id)}/operators/scan`, {}),
+  deviceOperatorSelect: (id, body) => j('POST', `/api/devices/${encodeURIComponent(id)}/operators/select`, body),
+  deviceUsbnet: (id) => j('GET', `/api/devices/${encodeURIComponent(id)}/usbnet`),
+  setDeviceUsbnet: (id, mode) => j('PUT', `/api/devices/${encodeURIComponent(id)}/usbnet`, { mode }),
+  deviceRestart: (id) => j('POST', `/api/devices/${encodeURIComponent(id)}/restart`, {}),
   deviceDiagnostics: (id) => j('POST', `/api/devices/${encodeURIComponent(id)}/diagnostics`, {}),
   saveDeviceHardware: (id, patch) => j('PUT', `/api/devices/${encodeURIComponent(id)}/hardware`, patch),
   deleteDevice: (id) => j('DELETE', `/api/devices/${encodeURIComponent(id)}`),
@@ -129,6 +140,8 @@ export const api = {
     `/api/instances/${id}/sms/send`,
     { to, body, transport },
   ),
+  carrierProfiles: () => j('GET', '/api/carrier-profiles'),
+  importCarrierIpcc: (body) => j('POST', '/api/carrier-profiles/import-ipcc', body),
   allowance: (id) => j('GET', `/api/instances/${id}/allowance`),
   saveAllowance: (id, body) => j('PUT', `/api/instances/${id}/allowance`, body),
   allowanceQueryRule: (id) => j('GET', `/api/instances/${id}/allowance/query-rule`),
@@ -164,7 +177,11 @@ export const api = {
   // eSIM / LPA (lpac) — first arg is usually the PC/SC reader NAME (string).
   // Optional se_id / aid target a specific Secure Element on dual-SE cards.
   esimStatus: () => j('GET', '/api/esim/status'),
-  esimChip: (readerOrIndex, maybeName) => j('GET', `/api/esim/chip?${readerQuery(readerOrIndex, maybeName)}`),
+  esimChip: (readerOrIndex, maybeName, opts) => {
+    const q = readerQuery(readerOrIndex, maybeName)
+    if (opts && opts.stop) q.set('stop', 'true')
+    return j('GET', `/api/esim/chip?${q}`)
+  },
   esimChipCached: (readerOrIndex, maybeName) => j('GET', `/api/esim/chip/cached?${readerQuery(readerOrIndex, maybeName)}`),
   esimProfiles: (readerOrIndex, maybeName) => j('GET', `/api/esim/profiles?${readerQuery(readerOrIndex, maybeName)}`),
   esimEnable: (iccid, readerOrBody) => j(

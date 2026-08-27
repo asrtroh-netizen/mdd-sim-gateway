@@ -79,6 +79,12 @@ class AutoProvisionTests(unittest.TestCase):
         hardware_imei.assert_not_called()
         upsert.assert_not_called()
 
+    def test_line_identity_matches_iccid_case_insensitively(self):
+        inst = {**self.draft, "iccid": "89000000000000abcd"}
+        with patch.object(main.cfg, "list_instances", return_value=[inst]):
+            self.assertEqual(
+                main._match_instance_by_iccid("89000000000000ABCDF")["id"], "2")
+
     def test_giffgaff_profile_rebuilds_required_sip_identity(self):
         first = config.carrier_sip_defaults("234", "10", "test-card")
         again = config.carrier_sip_defaults("234", "010", "test-card")
@@ -447,6 +453,107 @@ class IdenticalNativeReaderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(instances["1"]["reader_index"], 1)
         self.assertEqual(instances["2"]["reader_port"], "2-3")
         self.assertEqual(instances["2"]["reader_index"], 0)
+
+
+class VowifiOffCardSwapRecoveryTests(unittest.IsolatedAsyncioTestCase):
+    """Turning VoWiFi off then swapping the card must not deadlock the draft (upstream #19)."""
+
+    def setUp(self):
+        self.old = {
+            "id": "2", "name": "234-33", "provisioning_state": "ready",
+            "enabled": False, "imsi": "234330123456789", "mcc": "234", "mnc": "33",
+            "iccid": "89000000000000000011", "smsc": "+447700900000",
+            "imei_source_device_id": "modem-a",
+            "pin_reader": "VoWiFi Modem modem-a 00 00",
+            "swu_reader": "VoWiFi Modem modem-a 00 01",
+            "ami_reader": "VoWiFi Modem modem-a 00 02",
+        }
+        self.card = {
+            "present": True, "index": 4, "name": "VoWiFi Modem modem-a 00 01",
+            "hardware_kind": "modem", "hardware_id": "modem-a", "reader_port": "",
+            "imsi": "234331234567890", "mcc": "234", "mnc": "33",
+            "iccid": "89000000000000000022", "smsc": "+447700900111",
+            "pin_enabled": False,
+            "virtual_slots": [
+                {"index": 3, "name": "VoWiFi Modem modem-a 00 00"},
+                {"index": 4, "name": "VoWiFi Modem modem-a 00 01"},
+                {"index": 5, "name": "VoWiFi Modem modem-a 00 02"},
+            ],
+        }
+
+    def test_swap_rebinds_the_existing_line_instead_of_minting_a_dead_draft(self):
+        instances = {"2": dict(self.old)}
+
+        def upsert(update, **_kwargs):
+            iid = str(update["id"])
+            instances[iid].update(update)
+            return dict(instances[iid])
+
+        main.hub.cards.clear()
+        self.addCleanup(main.hub.cards.clear)
+        with patch.object(main.cfg, "list_instances",
+                          side_effect=lambda: [dict(value) for value in instances.values()]), \
+                patch.object(main.cfg, "get_instance",
+                             side_effect=lambda iid: dict(instances[str(iid)])), \
+                patch.object(main.cfg, "upsert_instance", side_effect=upsert), \
+                patch.object(main.cfg, "card_auto_create_suppressed", return_value=False):
+            rebound = main._ensure_card_draft(self.card)
+
+        self.assertEqual(rebound["id"], "2")
+        self.assertEqual(rebound["iccid"], "89000000000000000022")
+        self.assertEqual(set(instances), {"2"})
+
+    async def test_hotplug_promotes_a_complete_draft_while_vowifi_is_off(self):
+        draft = {
+            "id": "2", "name": "234-33", "provisioning_state": "draft",
+            "enabled": False, "imsi": self.card["imsi"], "mcc": "234", "mnc": "33",
+            "iccid": self.card["iccid"], "smsc": self.card["smsc"],
+        }
+        desired = {"defaults": {"vowifi_enabled": True},
+                   "devices": {"modem-a": {"vowifi_enabled": False}}}
+        promoted = {**draft, "provisioning_state": "ready", "enabled": False}
+
+        with patch.object(main.asyncio, "sleep", new=AsyncMock()), \
+                patch.object(main.cfg, "get_instance", return_value=draft), \
+                patch.object(main.engine, "is_running", return_value=False), \
+                patch.object(main.hub, "cards_list", return_value=[self.card]), \
+                patch.object(main.device_state, "desired", return_value=desired), \
+                patch.object(main, "_auto_promote_card_draft",
+                             return_value=promoted) as promote, \
+                patch.object(main, "_start_engine_checked") as start:
+            await main._auto_start_hotplugged_line("2")
+
+        promote.assert_called_once()
+        self.assertEqual(promote.call_args.kwargs.get("enable"), False)
+        start.assert_not_called()
+
+    async def test_complete_draft_keeps_the_vowifi_toggle_available(self):
+        draft = {**self.old, "provisioning_state": "draft", "enabled": False,
+                 "auto_provision_missing": None}
+        desired = {"devices": {"modem-a": {
+            "cellular_enabled": False, "vowifi_enabled": False, "flight_mode": False}}}
+        observed = {"devices": {"modem-a": {
+            "present": True,
+            "actual": {"cellular_radio_enabled": True, "vowifi_bridge_active": False},
+            "cellular": {"available": True, "sim_iccid": draft["iccid"],
+                         "registration": "home", "radio_enabled": True}}}}
+        with patch.object(main, "_device_sources", return_value=(desired, observed, {})), \
+                patch.object(main, "_device_identities", return_value={}), \
+                patch.object(main.hub, "cards_list", return_value=[]), \
+                patch.object(main.cfg, "list_instances", return_value=[draft]), \
+                patch.object(main, "_match_instance_by_iccid", return_value=draft), \
+                patch.object(main.device_state, "native_reader_devices", return_value={}), \
+                patch.object(main.device_state, "hardware", return_value={}), \
+                patch.object(main.cfg, "get_settings", return_value={
+                    "proxy": {"exits": {}}, "rekey": {"minutes": 30}}), \
+                patch.object(main, "_cached_line_status", return_value=None), \
+                patch.object(main.egress, "status", return_value={"lines": {}}), \
+                patch.object(main.egress, "line_country", return_value="GB"), \
+                patch.object(main.egress, "country_for_mcc", return_value="GB"):
+            devices = await main._unified_devices()
+
+        self.assertEqual(len(devices), 1)
+        self.assertTrue(devices[0]["capabilities"]["vowifi"]["available"])
 
 
 class EsimProfileRefreshTests(unittest.IsolatedAsyncioTestCase):

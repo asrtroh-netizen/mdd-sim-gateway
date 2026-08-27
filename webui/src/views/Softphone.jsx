@@ -445,10 +445,22 @@ export default function Softphone({ selected, subscribe, instances, cards, devic
       return
     }
     if (callTransport === 'cellular') {
-      // The cellular backend places a voice call. A service code is supplementary-service
-      // signalling, which needs AT+CUSD instead, so fail loudly rather than dialling nonsense.
+      // Voice dial cannot carry a service code. Send it as module USSD (AT+CUSD) instead.
       if (isServiceCode(target)) {
-        toast(t('Service codes can only be dialled over VoWiFi, not the cellular modem.'))
+        if (!selectedDevice?.id) {
+          toast(t('Service codes on the cellular modem need a connected module.'))
+          return
+        }
+        setCellularBusy(true)
+        try {
+          const result = await api.deviceUssd(selectedDevice.id, target)
+          if (!result.ok) {
+            toast(`${t('USSD failed')}: ${result.error || t('Unknown')}`)
+            return
+          }
+          toast(result.text || t('USSD request accepted'))
+        } catch (error) { toast(`${t('USSD failed')}: ${error.message}`) }
+        finally { setCellularBusy(false) }
         return
       }
       if (!cellularReady) { toast(t('Turn on 4G and wait for the cellular modem to become ready first.')); return }

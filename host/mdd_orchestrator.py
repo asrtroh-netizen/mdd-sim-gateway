@@ -932,6 +932,8 @@ class Orchestrator:
             backend_active = mm_active
             cellular_state = self.cellular_states.get(device_id) or {}
             radio_enabled = self.radio_states.get(device_id)
+            if cellular_state.get("available") and "radio_enabled" in cellular_state:
+                radio_enabled = bool(cellular_state.get("radio_enabled"))
             target_data_active = bool(wanted.get("cellular_enabled")) and not bool(
                 wanted.get("flight_mode"))
             observed_data_active = bool(cellular_state.get("data_active"))
@@ -1314,6 +1316,50 @@ class Orchestrator:
         match = re.search(rf"^{re.escape(key)}\s*:\s*(.*?)\s*$", text or "", re.MULTILINE)
         return match.group(1).strip() if match else ""
 
+    def _radio_metrics(self, detail: str, obj: str) -> dict:
+        """Read RSRP/RSRQ/SINR, RAT, band and channel from the module, not a cached guess."""
+        signal_text = ""
+        if obj:
+            extra = run(["mmcli", "-m", obj, "--signal-get", "--output-keyvalue"])
+            if extra.returncode == 0:
+                signal_text = extra.stdout or ""
+        text = "\n".join(part for part in (detail, signal_text) if part)
+
+        def number(key: str):
+            raw = self._kv(text, key)
+            if not raw or raw.casefold() in {"--", "unknown", "none", "n/a"}:
+                return None
+            try:
+                value = float(raw.split()[0])
+            except (TypeError, ValueError):
+                return None
+            return value if value == value and value not in {float("inf"), float("-inf")} else None
+
+        access = self._kv(text, "modem.generic.access-technologies.value[1]")
+        if not access:
+            techs = re.findall(
+                r"modem\.generic\.access-technologies\.value\[\d+\]\s*:\s*(\S+)", text)
+            access = techs[0] if techs else ""
+        if access.casefold() in {"--", "unknown", "none", "n/a"}:
+            access = ""
+        band = self._kv(text, "modem.generic.current-bands.value[1]")
+        if band.casefold() in {"--", "unknown", "none", "n/a"}:
+            band = ""
+        channel = None
+        for key in ("modem.signal.lte.earfcn", "modem.signal.nr5g.earfcn",
+                    "modem.signal.umts.uarfcn", "modem.signal.gsm.arfcn"):
+            raw = self._kv(text, key)
+            if raw.isdigit():
+                channel = int(raw)
+                break
+        return {
+            "rsrp": number("modem.signal.lte.rsrp") or number("modem.signal.nr5g.rsrp"),
+            "rsrq": number("modem.signal.lte.rsrq") or number("modem.signal.nr5g.rsrq"),
+            "sinr": number("modem.signal.lte.snr") or number("modem.signal.lte.sinr")
+                    or number("modem.signal.nr5g.snr"),
+            "access_tech": access, "band": band, "channel": channel,
+        }
+
     @staticmethod
     def normalize_msisdn(value: str) -> str:
         """Return a conservative E.164-like number from ModemManager OwnNumbers.
@@ -1386,6 +1432,7 @@ class Orchestrator:
             # copies OwnNumbers into a line configuration.
             "msisdn": msisdn, "sim_iccid": sim_iccid,
         }
+        snapshot.update(self._radio_metrics(text, obj))
         bearer_paths = re.findall(r"modem\.generic\.bearers\.value\[\d+\]\s*:\s*(\S+)", text)
         for bearer in bearer_paths:
             info = run(["mmcli", "-b", bearer, "--output-keyvalue"])
@@ -1648,7 +1695,7 @@ class Orchestrator:
                 snapshot = self.modem_snapshot(modem)
                 observed = snapshot.get("radio_enabled") if snapshot.get("available") else None
                 if observed == radio_enabled:
-                    self.radio_states[device_id] = radio_enabled
+                    self.radio_states[device_id] = observed
                     if radio_enabled and data_enabled:
                         self.ensure_modem_data(modem, snapshot)
                     else:
@@ -1665,6 +1712,17 @@ class Orchestrator:
                 if result.returncode and "already" not in output.lower():
                     self.log(f"could not set cellular radio for {device_id}: {output.strip()}")
                     continue
+                fresh = self.modem_snapshot(modem)
+                observed = fresh.get("radio_enabled") if fresh.get("available") else None
+                if observed is None:
+                    self.log(f"cellular radio write for {device_id} produced no readable state")
+                    continue
+                self.radio_states[device_id] = observed
+                if observed and data_enabled:
+                    self.ensure_modem_data(modem, fresh)
+                else:
+                    self.disconnect_modem_data(fresh)
+                self.cellular_states[device_id] = self.modem_snapshot(modem)
             else:
                 if serial is None:
                     continue
@@ -1672,22 +1730,24 @@ class Orchestrator:
                     modem_port = serial.Serial(modem["tty"], 115200, timeout=.5,
                                                write_timeout=2, exclusive=True)
                     try:
+                        modem_port.reset_input_buffer()
                         modem_port.write(b"AT+CFUN=1\r" if radio_enabled else b"AT+CFUN=4\r")
                         modem_port.flush()
                         time.sleep(.3)
+                        modem_port.write(b"AT+CFUN?\r")
+                        modem_port.flush()
+                        time.sleep(.2)
+                        reply = modem_port.read(64).decode("ascii", "replace")
                     finally:
                         modem_port.close()
                 except Exception as exc:
                     self.log(f"could not set cellular radio for {device_id}: {exc}")
                     continue
-            self.radio_states[device_id] = radio_enabled
-            if through_modemmanager:
-                fresh = self.modem_snapshot(modem)
-                if radio_enabled and data_enabled:
-                    self.ensure_modem_data(modem, fresh)
-                else:
-                    self.disconnect_modem_data(fresh)
-                self.cellular_states[device_id] = self.modem_snapshot(modem)
+                match = re.search(r"\+CFUN:\s*(\d+)", reply)
+                if not match:
+                    self.log(f"cellular radio write for {device_id} produced no +CFUN readback")
+                    continue
+                self.radio_states[device_id] = match.group(1) not in {"0", "4"}
 
     def log(self, message):
         line = f"{time.strftime('%F %T')} {message}"

@@ -5,11 +5,12 @@
 - 推荐 ARM64 Debian、Ubuntu 或 Armbian，systemd 可用。
 - Docker、USB、内核 TUN、pcscd；蜂窝模块还需要 ModemManager/NetworkManager。
 - 已实机验证的三体电子 SCR Prime（`04d9:c001`）提供标准 CCID 接口，但尚未进入 libccid 1.6.2 的设备表。连接该型号时执行 `sudo ./install.sh patchprime`，安装程序会从校验过的固定版本源码构建驱动并加入设备匹配；完成后支持热插拔。
-- 至少 4 GB 可用磁盘。ARM64 正式版本升级会通过与源码包相同的直连或代理通道下载 CI 在
-  原生 ARM64 runner 构建、并按校验和、版本与源码指纹核验的 Engine；设备不再为了 Engine
-  变更编译 Asterisk。同一镜像仍发布到 GHCR，供手工安装与独立核验。amd64 没有对应的
-  Release 镜像资产，升级器会保留架构边界并在本机刷新或构建原生 Engine，绝不导入 ARM64
-  镜像。
+- 至少 4 GB 可用磁盘。正式 Release 同时提供 ARM64 与 amd64 的 Engine / 控制镜像资产。
+  一键升级按主机架构下载对应 `*-arm64.tar.gz` 或 `*-amd64.tar.gz`，校验和、版本与源码
+  指纹核验通过后再 `docker load`；设备不再为了 Engine 变更编译 Asterisk。GHCR 上
+  `:vX.Y.Z` 仍是 ARM64 镜像（兼容旧安装），amd64 使用 `:vX.Y.Z-amd64` 以及同名
+  Release 资产。`install.sh` 与升级器会拒绝在 amd64 主机上安装 arm64 镜像（或反过来）。
+  本机没有匹配架构的预构建资产时，用下面的命令在本机构建，不要导入另一架构的 tar。
 - 手工执行全新 Engine 构建时，固定 commit 从项目维护的 GitHub sysmocom 镜像获取；
   镜像只保存构建所需的上游分支，原始项目与许可归属不变。离线迁移仍可使用已经审核的
   `MDD_ENGINE_BASE_IMAGE`，不得关闭 TLS 验证或改用未审核源码。
@@ -33,7 +34,7 @@ sudo ./install.sh install --mode docker   # 控制面也运行在 Docker
 
 ## 更新
 
-系统设置可在“自动更新”和“提示更新”中二选一，并分别选择全部版本或主版本。主版本不按版本号推断，而由 `update-policy.json` 的 `release.kind` 明确标记为 `main`；其他版本标记为 `patch`。新安装默认自动更新主版本；自动模式不再发送发现新版本提示，匹配的版本仍必须由同一策略文件单独标记为稳定、匹配完全相同的版本并到达 `not_before` 时间，单纯发布 Release 不会触发安装。提示模式默认提示全部版本，左下角版本号出现红点后，由管理员查看说明并确认“立即升级”。更新时控制面把请求写入编排器目录，主机上的 `mdd-sim-gateway-orchestrator` 以独立的临时 systemd 单元（`mdd-sim-gateway-update`）运行 `host/mdd_update.py` —— 下载对应 `vX.Y.Z` Release 资产、校验 SHA-256 和版本，并比较新源码与本机 Engine 指纹。Engine 输入发生变化时，更新器通过同一条直连或代理回退线路下载该版本的 ARM64 Engine 资产，校验后导入 Docker，再核对架构、版本和两类指纹；输入未变化时不会重复下载。备份与覆盖源码后，安装器保存旧 Engine 的 `:previous` 回滚标签，启用新镜像并只重建旧镜像上的线路，控制面重新扫描在位 SIM 使线路自愈。Docker 控制面模式还会取得已校验的 ARM64 控制镜像资产并执行 `docker load`。`data/`、`.env`、`.git` 和虚拟环境均保留。日志见 `journalctl -u mdd-sim-gateway-update`、数据目录下 `update/reload.log` 与 `update/engine-image.log`。
+系统设置可在“自动更新”和“提示更新”中二选一，并分别选择全部版本或主版本。主版本不按版本号推断，而由 `update-policy.json` 的 `release.kind` 明确标记为 `main`；其他版本标记为 `patch`。新安装默认自动更新主版本；自动模式不再发送发现新版本提示，匹配的版本仍必须由同一策略文件单独标记为稳定、匹配完全相同的版本并到达 `not_before` 时间，单纯发布 Release 不会触发安装。提示模式默认提示全部版本，左下角版本号出现红点后，由管理员查看说明并确认“立即升级”。更新时控制面把请求写入编排器目录，主机上的 `mdd-sim-gateway-orchestrator` 以独立的临时 systemd 单元（`mdd-sim-gateway-update`）运行 `host/mdd_update.py` —— 下载对应 `vX.Y.Z` Release 资产、校验 SHA-256 和版本，并比较新源码与本机 Engine 指纹。Engine 输入发生变化时，更新器通过同一条直连或代理回退线路下载该版本、与主机架构匹配的 Engine 资产，校验后导入 Docker，再核对架构、版本和两类指纹；资产架构不对则拒绝安装。输入未变化时不会重复下载。备份与覆盖源码后，安装器保存旧 Engine 的 `:previous` 回滚标签，启用新镜像并只重建旧镜像上的线路，控制面重新扫描在位 SIM 使线路自愈。成功后删除未在使用的旧 Engine 标签，但不会删掉正在运行的标签。Docker 控制面模式还会取得已校验的、同架构控制镜像资产并执行 `docker load`。`data/`、`.env`、`.git` 和虚拟环境均保留。日志见 `journalctl -u mdd-sim-gateway-update`、数据目录下 `update/reload.log` 与 `update/engine-image.log`。
 
 “系统设置 → 备份与更新”默认使用“自动”联网：先直连 GitHub，连接失败、超时或被限流时，再按代理库顺序尝试可用条目；检查成功的线路会继续用于更新下载。也可选择“仅直连”或指定一个代理库条目。SOCKS5 条目可直接使用；订阅、具体节点和导入的 outbound 需已分配给一个已启用且就绪的国家出口。代理凭据只保存一份，并只通过主机权限为 `0600` 的配置/临时文件传递，不写入 systemd 命令行或升级状态。
 控制面不依赖浏览器登录，每 6 小时检查一次 Release。提示更新模式会通过已启用的 Webhook、Telegram 或 PushPlus 通道发送一次去重通知；选择“仅主版本”时，只处理在 `update-policy.json` 中明确标记为 `main` 的 Release，不从版本号位数推断。
@@ -52,6 +53,21 @@ sudo ./install.sh reload --engines
 ```
 
 该方式保留数据并从固定源码重建依赖与引擎；正式一键升级优先使用 CI 分发镜像。
+
+只构建当前主机架构的 Engine（例如在 amd64 上，不要加载 ARM64 资产）：
+
+```bash
+docker build --platform linux/amd64 -t mdd-sim-gateway/engine engine
+# ARM64 主机把 linux/amd64 换成 linux/arm64
+```
+
+安装或升级之后可用一条命令核对 Docker、ModemManager/mmcli、pcscd、TUN/XFRM、
+Engine 镜像架构和数据目录（输出不含 Token / 密码 / ICCID）：
+
+```bash
+sudo ./install.sh doctor
+# 或：PYTHONPATH=. python3 -m control.app.doctor
+```
 
 正式发布前请逐项完成 [发布检查清单](RELEASE_CHECKLIST.md)。推送与 `VERSION` 一致的 `vX.Y.Z` 标签后，Release 工作流会运行全套测试，并生成带 SHA-256 校验文件的源码包。
 

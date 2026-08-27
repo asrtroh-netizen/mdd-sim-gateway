@@ -273,6 +273,40 @@ bearer.stats.tx-bytes : 456
             self.assertEqual(value["rx_bytes"], 123)
             self.assertEqual(value["msisdn"], "+12025550100")
             self.assertEqual(value["sim_iccid"], "8901000000000000001")
+            self.assertIn("rsrp", value)
+            self.assertIn("access_tech", value)
+
+    def test_modem_snapshot_exposes_live_lte_radio_metrics(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = Orchestrator(Path(temp) / "data", Path(temp), dry_run=True)
+            detail = """modem.generic.state : registered
+modem.generic.power-state : on
+modem.generic.access-technologies.value[1] : lte
+modem.generic.current-bands.value[1] : eutran-7
+modem.3gpp.registration-state : home
+"""
+            signal = """modem.signal.lte.rsrp : -102.00
+modem.signal.lte.rsrq : -11.00
+modem.signal.lte.snr : 12.50
+modem.signal.lte.earfcn : 3350
+"""
+
+            def fake_run(args, **_kwargs):
+                if args[:2] == ["mmcli", "-m"] and "--signal-get" in args:
+                    return SimpleNamespace(returncode=0, stdout=signal, stderr="")
+                if args[:2] == ["mmcli", "-m"]:
+                    return SimpleNamespace(returncode=0, stdout=detail, stderr="")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch.object(app, "modemmanager_modem_for_tty", return_value="0"), patch(
+                    "host.mdd_orchestrator.run", side_effect=fake_run):
+                value = app.modem_snapshot({"id": "modem-a", "tty": "/dev/ttyUSB2"})
+            self.assertEqual(value["rsrp"], -102.0)
+            self.assertEqual(value["rsrq"], -11.0)
+            self.assertEqual(value["sinr"], 12.5)
+            self.assertEqual(value["access_tech"], "lte")
+            self.assertEqual(value["band"], "eutran-7")
+            self.assertEqual(value["channel"], 3350)
 
     def test_modem_number_normalization_rejects_placeholders_and_status_text(self):
         self.assertEqual(Orchestrator.normalize_msisdn("--"), "")
@@ -881,6 +915,32 @@ modem.3gpp.registration-state : unknown
             device = device_state._read(str(app.device_status_path), {})["devices"]["a"]
             self.assertFalse(device["transitioning"])
             self.assertEqual(device["actual"]["vowifi_backend"], "direct-serial")
+
+    def test_flight_mode_write_uses_module_readback_not_the_request(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = Orchestrator(Path(temp) / "data", Path(temp), dry_run=False)
+            detail = """modem.generic.state : enabled
+modem.generic.power-state : on
+modem.3gpp.registration-state : home
+"""
+
+            def fake_run(args, **_kwargs):
+                if args[:3] == ["mmcli", "-m", "0"] and "--disable" in args:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                if args[:2] == ["mmcli", "-m"]:
+                    return SimpleNamespace(returncode=0, stdout=detail, stderr="")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch.object(app, "modemmanager_modem_for_tty", return_value="0"), \
+                    patch.object(app, "disconnect_modem_data"), \
+                    patch("host.mdd_orchestrator.run", side_effect=fake_run):
+                app.apply_device_radios(
+                    [{"id": "a", "tty": "/dev/ttyUSB2"}],
+                    {"a": {"cellular_enabled": False, "flight_mode": True,
+                           "vowifi_enabled": True}},
+                    through_modemmanager=True)
+            # --disable was accepted, but the module still reports RF on.
+            self.assertTrue(app.radio_states["a"])
 
     def test_serial_mode_never_touches_the_modem_radio_port(self):
         """VoWiFi-only mode gives the direct bridge exclusive ownership of the AT port.

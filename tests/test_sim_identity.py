@@ -4,6 +4,7 @@ import unittest
 
 
 # Pure decoder tests should remain runnable on development hosts without libpcsclite/pyscard.
+from control.app import identity
 try:
     from control.app import sim
 except ModuleNotFoundError as exc:
@@ -21,6 +22,24 @@ except ModuleNotFoundError as exc:
                         "smartcard.CardConnection": connection,
                         "smartcard.Exceptions": exceptions, "smartcard.scard": scard})
     from control.app import sim
+
+
+class IccidIdentityTests(unittest.TestCase):
+    def test_hex_iccid_matches_across_case_and_padding(self):
+        stored = "89000000000000abcd"
+        from_mm = "89000000000000ABCDF"
+        self.assertEqual(identity.normalize_iccid(stored), "89000000000000abcd")
+        self.assertEqual(identity.normalize_iccid(from_mm), "89000000000000abcd")
+        self.assertTrue(identity.iccids_equal(stored, from_mm))
+
+    def test_non_hex_fixtures_are_only_casefolded(self):
+        self.assertEqual(identity.normalize_iccid("card-F"), "card-f")
+        self.assertTrue(identity.iccids_equal("card-F", "card-f"))
+        self.assertFalse(identity.iccids_equal("", "card-f"))
+
+    def test_uppercase_ef_padding_is_stripped(self):
+        # EF.ICCID nibble-swapped hex; trailing F is padding on some cards.
+        self.assertEqual(sim.dec_iccid("98000000000000BADCFF"), "89000000000000abcd")
 
 
 class SimCarrierIdentityTests(unittest.TestCase):

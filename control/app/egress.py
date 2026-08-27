@@ -289,6 +289,13 @@ def line_country(inst: dict) -> str:
 def epdg_for(inst: dict) -> str:
     if inst.get("epdg"):
         return str(inst["epdg"]).strip()
+    try:
+        from . import carrier_profile
+        overlay = carrier_profile.apply_to_instance(inst)
+        if overlay.get("epdg"):
+            return overlay["epdg"]
+    except Exception:
+        pass
     mcc = str(inst.get("mcc") or "").zfill(3)
     mnc = str(inst.get("mnc") or "").zfill(3)
     if not mcc.strip("0") or not mnc.strip("0"):

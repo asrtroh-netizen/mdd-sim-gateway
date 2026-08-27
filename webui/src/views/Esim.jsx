@@ -385,14 +385,22 @@ function DownloadModal({ reader, ses, imeiDefault, onClose, onStarted, showToast
   )
 }
 
+function normalizeIccid(value) {
+  const raw = String(value || '').trim().toLowerCase()
+  if (!raw) return ''
+  if (raw.length >= 15 && /^[0-9a-f]+$/.test(raw)) return raw.replace(/f+$/, '')
+  return raw
+}
+
 function instanceForCard(card, instances) {
   if (!card) return null
   if (card.matched != null) {
     const byId = instances.find((i) => String(i.id) === String(card.matched))
     if (byId) return byId
   }
-  if (card.iccid) {
-    return instances.find((i) => i.iccid && i.iccid === card.iccid) || null
+  const needle = normalizeIccid(card.iccid)
+  if (needle) {
+    return instances.find((i) => normalizeIccid(i.iccid) === needle) || null
   }
   return null
 }
@@ -421,6 +429,7 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
   const [dl, setDl] = useState(null) // {step, event, metadata, error, done}
   const [renameTarget, setRenameTarget] = useState(null) // { se, profile }
   const [busyOp, setBusyOp] = useState('')
+  const [recovery, setRecovery] = useState(null) // structured reader_busy / card_mismatch
 
   useEffect(() => {
     if (!reader && present[0]) setReader(present[0].name)
@@ -464,6 +473,7 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
     setErr('')
     setDl(null)
     setRenameTarget(null)
+    setRecovery(null)
   }, [reader])
 
   // Without a fresh read, show the gateway's persisted last read for this card (matched
@@ -481,7 +491,7 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
     return () => { cancelled = true }
   }, [loaded, loading, ses.length, reader, selectedCard?.iccid])
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (opts = {}) => {
     if (!reader) return
     setLoading(true)
     setErr('')
@@ -493,10 +503,12 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
       if (!st.available) {
         setErr(t('lpac is not installed. Run "sudo ./install.sh build-lpac" on the host.'))
         setLoaded(false)
-        return
+        return false
       }
       // One call loads every SE (chip + profiles + notifications).
-      const c = await api.esimChip(reader)
+      // stop=true asks the control plane to halt VoWiFi on this reader first so lpac
+      // can take exclusive PC/SC — the client-side stop alone could race a restart.
+      const c = await api.esimChip(reader, undefined, { stop: !!opts.stop })
       const list = c.ses || []
       setSes(list)
       setMeta({ imei: c.imei || '' })
@@ -513,13 +525,19 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
       }
       setLoaded(true)
       setCachedAt(0)
+      return true
     } catch (e) {
       // Non-eUICC cards surface as a calm empty state, not a red error banner.
+      const detail = e.data?.detail && typeof e.data.detail === 'object' ? e.data.detail : null
+      if (detail?.code === 'reader_busy' || e.code === 'reader_busy') {
+        setRecovery(detail || { code: 'reader_busy', message: e.message })
+      }
       setEmptyReason(isNoCardError(e.message) ? 'no-card' : 'not-euicc')
       setErr(isNonEuiccError(e.message) || isNoCardError(e.message) ? '' : e.message)
       setSes([])
       setMeta({ imei: '' })
       setLoaded(true)
+      return false
     } finally {
       setLoading(false)
     }
@@ -532,11 +550,12 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
     const title = profileDisplayName(p, t('Profile'))
     const target = seTarget(reader, se)
     if (lineRunning && matchedInst) {
-      const ok = confirm(t('Switch to "{name}"? Running line {id} stops first; the line for the newly enabled profile starts again automatically.', { name: title, id: matchedInst.id }))
+      const ok = confirm(t('Switch to "{name}"? Running line {id} stops first. The line is rebound to the new ICCID; turn VoWiFi on when you are ready.', { name: title, id: matchedInst.id }))
       if (!ok) return
     }
     setBusyOp('Enable')
     setErr('')
+    setRecovery(null)
     try {
       if (lineRunning && matchedInst) {
         await api.stop(matchedInst.id)
@@ -552,9 +571,14 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
             : String(x.profileState || '').toLowerCase() === 'enabled' ? 'disabled' : x.profileState,
         })),
       })))
-      showToast?.(t('Switched to {name} — its line starts automatically', { name: title }))
+      showToast?.(t('Switched to {name}. The line now follows the new ICCID — turn VoWiFi on when you are ready.', { name: title }))
+      setRecovery(null)
       await refresh?.()
     } catch (e) {
+      const detail = e.data?.detail && typeof e.data.detail === 'object' ? e.data.detail : null
+      if (detail?.code === 'card_mismatch' || detail?.code === 'reader_busy' || e.code === 'card_mismatch' || e.code === 'reader_busy') {
+        setRecovery(detail || { code: e.code, message: e.message })
+      }
       showToast?.(e.message)
       setErr(e.message)
     }
@@ -573,15 +597,18 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
       if (!ok) return
       setBusyOp('stop')
       try {
-        await api.stop(matchedInst.id)
-        showToast?.(t('Line {id} stopped', { id: matchedInst.id }))
-        await refresh?.()
+        const okLoad = await loadAll({ stop: true })
+        if (okLoad) {
+          showToast?.(t('Line {id} stopped', { id: matchedInst.id }))
+          await refresh?.()
+        }
       } catch (e) {
         showToast?.(e.message)
         setBusyOp('')
         return
       }
       setBusyOp('')
+      return
     }
     await loadAll()
   }, [reader, loading, busyOp, lineRunning, matchedInst, loadAll, refresh, showToast, t])
@@ -721,7 +748,29 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
         </div>
       )}
 
-      {err && (
+      {recovery && (
+        <div className="card" style={{ padding: 14, borderColor: '#f59e0b', background: 'color-mix(in srgb, #f59e0b 12%, var(--panel))' }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            {t(recovery.code === 'reader_busy' ? 'Reader is busy' : 'Card does not match the enabled profile')}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 10 }}>
+            {recovery.message || err}
+          </div>
+          {recovery.code === 'card_mismatch' && (
+            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 10 }}>
+              {t('Enable stays available — switch again, or start the line that matches the card now in the reader.')}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" disabled={loading || !!busyOp} onClick={() => { setRecovery(null); requestLoad() }}>
+              {t('Load')}
+            </button>
+            <button className="btn btn-ghost" onClick={() => setRecovery(null)}>{t('Dismiss')}</button>
+          </div>
+        </div>
+      )}
+
+      {err && !recovery && (
         <div className="card" style={{ padding: 14, color: '#b91c1c', borderColor: '#fecaca' }}>
           {err}
         </div>
@@ -814,6 +863,12 @@ export default function Esim({ cards, instances, refresh, subscribe, showToast }
                   <div style={{ color: 'var(--text-mute)', fontSize: 11 }}>{t('Free NVM')}</div>
                   <div>{formatBytes(ses[0]?.freeSpace ?? ses[0]?.chip?.freeNonVolatileMemory)}</div>
                 </div>
+                {(ses[0]?.chip?.certs?.sas || ses[0]?.chip?.certs?.ci_verify?.length) && (
+                  <div>
+                    <div style={{ color: 'var(--text-mute)', fontSize: 11 }}>{t('eUICC certificates')}</div>
+                    <div>{ses[0].chip.certs.sas || t('{count} CI public keys', { count: (ses[0].chip.certs.ci_verify || []).length })}</div>
+                  </div>
+                )}
               </div>
             )}
             <div>

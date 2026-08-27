@@ -43,6 +43,7 @@ VERSION_RE = re.compile(r"\d+(?:\.\d+)*(?:-[0-9A-Za-z.]+)?")
 REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 ENGINE_REGISTRY_IMAGE = "ghcr.io/mddidd/mdd-sim-gateway-engine"
 ENGINE_HANDOFF_MANIFEST = Path("engine/release-image.SHA256SUMS")
+ENGINE_IMAGE = "mdd-sim-gateway/engine"
 
 
 class UpdateError(RuntimeError):
@@ -56,6 +57,42 @@ def host_arch() -> str:
     if machine in {"x86_64", "amd64"}:
         return "amd64"
     raise UpdateError(f"unsupported CPU architecture: {machine or 'unknown'}")
+
+
+def engine_archive_name(version: str, arch: str | None = None) -> str:
+    return f"mdd-sim-gateway-engine-v{version}-{arch or host_arch()}.tar.gz"
+
+
+def control_archive_name(version: str, arch: str | None = None) -> str:
+    return f"mdd-sim-gateway-control-v{version}-{arch or host_arch()}.tar.gz"
+
+
+def checksum_names(sums: Path) -> set[str]:
+    names = set()
+    for line in sums.read_text(encoding="utf-8").splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2:
+            names.add(parts[1].lstrip("*"))
+    return names
+
+
+def refuse_wrong_engine_arch(image: str, *, expected_arch: str | None = None):
+    """Never activate an Engine whose Docker Architecture does not match this host."""
+    wanted = expected_arch or host_arch()
+    checked = subprocess.run(
+        ["docker", "image", "inspect", image, "--format", "{{.Architecture}}"],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    actual = (checked.stdout or "").strip().lower().split("|", 1)[0]
+    if actual in {"aarch64", "arm64"}:
+        actual = "arm64"
+    elif actual in {"x86_64", "amd64"}:
+        actual = "amd64"
+    if checked.returncode != 0 or not actual:
+        raise UpdateError(f"could not read architecture of engine image {image}")
+    if actual != wanted:
+        raise UpdateError(
+            f"refusing to install {actual} engine image {image} on {wanted} host")
+    return actual
 
 
 def atomic_json(path: Path, value: dict):
@@ -317,18 +354,37 @@ def load_control_image(artifact: Path, version: str):
 
 
 def prune_dangling_images() -> bool:
-    """Reclaim images orphaned by a successful update, without touching rollback tags.
+    """Reclaim untagged images orphaned by a successful update.
 
-    Docker refuses to prune images used by containers, and the installer's explicit
-    ``:previous`` Engine/control tags are not dangling. This therefore removes superseded
-    untagged images and obsolete build stages while preserving both the live images and the
-    intentional one-version rollback point. Cleanup is best-effort: a completed service reload
-    must not be reported as failed only because Docker could not reclaim optional cache space.
+    Tagged rollback images (``:previous``) are not dangling. This is best-effort and
+    never deletes a named Engine tag — ``cleanup_unused_engine_images`` owns that.
     """
     result = subprocess.run(
         ["docker", "image", "prune", "--force"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return result.returncode == 0
+
+
+def _load_engine_images(repo: Path | None = None):
+    """Load host.engine_images from the (possibly just-applied) checkout."""
+    path = (repo / "host" / "engine_images.py") if repo else None
+    if path and path.is_file():
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("mdd_engine_images", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    from host import engine_images
+    return engine_images
+
+
+def cleanup_unused_engine_images(repo: Path | None = None) -> dict:
+    """Remove unused prior Engine tags. Fail closed if the running tag would be deleted."""
+    module = _load_engine_images(repo)
+    try:
+        return module.cleanup_unused_engine_images(current_image=ENGINE_IMAGE)
+    except module.EngineImageError as exc:
+        raise UpdateError(str(exc)) from exc
 
 
 def release_engine_fingerprints(source_root: Path) -> tuple[str, str] | None:
@@ -359,7 +415,8 @@ def engine_image_matches_inputs(image: str, runtime_fp: str, base_fp: str) -> bo
 
 def load_release_engine(artifact: Path, version: str, runtime_fp: str, base_fp: str,
                         status: Status | None, log_path: Path) -> str:
-    """Import and identify the verified ARM64 Engine without replacing the running image yet."""
+    """Import and identify the verified Engine for THIS host architecture."""
+    arch = host_arch()
     image = f"{ENGINE_REGISTRY_IMAGE}:v{version}"
     started = time.monotonic()
     with open(log_path, "w", encoding="utf-8") as log:
@@ -370,18 +427,19 @@ def load_release_engine(artifact: Path, version: str, runtime_fp: str, base_fp: 
                 status.publish("running", "engine_image", artifact=artifact.name,
                                engine_image_required=True,
                                elapsed_seconds=max(0, int(time.monotonic() - started)),
-                               detail="importing verified ARM64 Engine image")
+                               detail=f"importing verified {arch} Engine image")
             time.sleep(3)
     if process.returncode:
         raise UpdateError(
             f"could not load Release Engine image: {_last_log_line(log_path, '') or 'docker load failed'}")
+    refuse_wrong_engine_arch(image, expected_arch=arch)
     checked = subprocess.run(
         ["docker", "image", "inspect", image, "--format",
          '{{.Architecture}}|{{index .Config.Labels "org.opencontainers.image.version"}}|'
          '{{index .Config.Labels "io.mdd-sim-gateway.runtime-fp"}}|'
          '{{index .Config.Labels "io.mdd-sim-gateway.base-fp"}}'],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    expected = f"arm64|{version}|{runtime_fp}|{base_fp}"
+    expected = f"{arch}|{version}|{runtime_fp}|{base_fp}"
     actual = checked.stdout.strip() if checked.returncode == 0 else ""
     if actual != expected:
         raise UpdateError(f"Release Engine image identity mismatch: {actual or 'unreadable'}")
@@ -477,11 +535,12 @@ def perform_engine_handoff(repo: Path, data: Path, version: str, repo_name: str,
     manifest = repo / ENGINE_HANDOFF_MANIFEST
     if not manifest.is_file():
         raise UpdateError("release has no Engine handoff manifest")
-    engine_name = f"mdd-sim-gateway-engine-v{version}-arm64.tar.gz"
+    engine_name = engine_archive_name(version)
     if not any(line.strip().split(None, 1)[-1].lstrip("*") == engine_name
                for line in manifest.read_text(encoding="utf-8").splitlines()
                if len(line.strip().split(None, 1)) == 2):
-        raise UpdateError("Engine handoff manifest does not name this release")
+        raise UpdateError(
+            f"Engine handoff manifest has no {host_arch()} Engine asset")
     update_dir = data / "update"
     update_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     if shutil.disk_usage(update_dir).free < 2 * 1024 * 1024 * 1024:
@@ -503,7 +562,7 @@ def perform_engine_handoff(repo: Path, data: Path, version: str, repo_name: str,
         base = f"https://github.com/{repo_name}/releases/download/v{version}"
         fetch_release_asset(f"{base}/{engine_name}", artifact, engine_name, clean_routes,
                             asset_sizes=asset_sizes, phase="engine_image")
-        verify_release_file(artifact, manifest, "ARM64 Engine image")
+        verify_release_file(artifact, manifest, f"{host_arch()} Engine image")
         fingerprints = release_engine_fingerprints(repo)
         if not fingerprints:
             raise UpdateError("release has no Engine identity metadata")
@@ -529,8 +588,9 @@ def perform(repo: Path, data: Path, version: str, repo_name: str, status: Status
         mode = installed_mode(data)
         asset_sizes = asset_sizes or {}
         archive_name = f"mdd-sim-gateway-v{version}.tar.gz"
-        control_name = f"mdd-sim-gateway-control-v{version}-arm64.tar.gz"
-        engine_name = f"mdd-sim-gateway-engine-v{version}-arm64.tar.gz"
+        arch = host_arch()
+        control_name = control_archive_name(version, arch)
+        engine_name = engine_archive_name(version, arch)
         base = f"https://github.com/{repo_name}/releases/download/v{version}"
         url = f"{base}/{archive_name}"
         # Publish the transfer skeleton before curl starts so the dialog shows a sized bar from
@@ -569,8 +629,11 @@ def perform(repo: Path, data: Path, version: str, repo_name: str, status: Status
         engine_fingerprints = release_engine_fingerprints(source_root)
         engine_refresh_required = bool(
             engine_fingerprints and not engine_image_matches_inputs(
-                "mdd-sim-gateway/engine", *engine_fingerprints))
-        release_images_supported = host_arch() == "arm64"
+                ENGINE_IMAGE, *engine_fingerprints))
+        named_assets = checksum_names(sums)
+        # Only the host architecture's prebuilt image is eligible. An arm64 asset
+        # on an amd64 host is never imported (upstream #13).
+        release_images_supported = engine_name in named_assets
         if engine_refresh_required and release_images_supported:
             if shutil.disk_usage(data / "update").free < 2 * 1024 * 1024 * 1024:
                 raise UpdateError("not enough persistent disk space to import the Engine image")
@@ -585,15 +648,17 @@ def perform(repo: Path, data: Path, version: str, repo_name: str, status: Status
                 clean_routes, active_route, asset_sizes=asset_sizes, status=status,
                 phase="engine_image")
             status.publish("running", "engine_image", artifact=engine_name,
-                           engine_image_required=True, detail="verifying ARM64 Engine image",
+                           engine_image_required=True,
+                           detail=f"verifying {arch} Engine image",
                            downloaded_bytes=0, total_bytes=0,
                            bytes_per_second=0, elapsed_seconds=0)
-            verify_release_file(engine_archive, sums, "ARM64 Engine image")
+            verify_release_file(engine_archive, sums, f"{arch} Engine image")
             distributed_engine = load_release_engine(
                 engine_archive, version, *engine_fingerprints, status,
                 data / "update" / "engine-image.log")
 
-        if mode == "docker" and release_images_supported:
+        control_image_supported = mode == "docker" and control_name in named_assets
+        if control_image_supported:
             if shutil.disk_usage(data / "update").free < 1024 * 1024 * 1024:
                 raise UpdateError("not enough persistent disk space to import the control image")
             status.publish("running", "control_image", artifact=control_name, detail="",
@@ -608,7 +673,7 @@ def perform(repo: Path, data: Path, version: str, repo_name: str, status: Status
             status.publish("running", "control_image", artifact=control_name,
                            downloaded_bytes=0, total_bytes=0, bytes_per_second=0,
                            elapsed_seconds=0, detail="")
-            verify_release_file(control_archive, sums, "ARM64 control image")
+            verify_release_file(control_archive, sums, f"{arch} control image")
             load_control_image(control_archive, version)
 
         status.publish("running", "backup")
@@ -628,14 +693,14 @@ def perform(repo: Path, data: Path, version: str, repo_name: str, status: Status
         selected_proxy_url = clean_routes[active_route]["proxy_url"]
         env = network_environment(selected_proxy_url)
         env["MDD_REUSE_WEBUI"] = "1"
-        if mode == "docker" and release_images_supported:
+        if control_image_supported:
             env["MDD_REUSE_CONTROL_IMAGE"] = "1"
         if distributed_engine:
             env["MDD_ENGINE_DISTRIBUTION_IMAGE"] = distributed_engine
         reload_command = ["sh", str(repo / "install.sh"), "reload"]
-        # Release images are ARM64-only. On amd64, leave Engine preservation disabled when
-        # its inputs changed so install.sh refreshes or builds the native image locally;
-        # Docker-mode control is likewise rebuilt locally instead of loading an ARM64 asset.
+        # Prebuilt Engine/control assets are per-architecture. When this host's
+        # arch is missing from SHA256SUMS, install.sh rebuilds natively and never
+        # imports the other architecture's image.
         if not distributed_engine and not engine_refresh_required:
             reload_command.append("--no-engines")
         result_code = reload_services(
@@ -646,6 +711,7 @@ def perform(repo: Path, data: Path, version: str, repo_name: str, status: Status
             with open(log_path, encoding="utf-8", errors="replace") as log:
                 tail = "".join(log.readlines()[-40:])
             raise UpdateError(f"install.sh reload exited with {result_code}\n{tail}")
+        cleanup_unused_engine_images(repo)
         prune_dangling_images()
         status.publish("success", "done", elapsed_seconds=int(time.time()) - status.started,
                        detail="")

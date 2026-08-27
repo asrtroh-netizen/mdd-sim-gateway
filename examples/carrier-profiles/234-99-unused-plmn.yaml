@@ -1,0 +1,22 @@
+# Second example: unused UK-style PLMN 234-99 (not assigned to a live operator here).
+# Shows a pinned IPv4 IMS probe without inventing a real subscriber identity.
+version: 1
+id: example-unused-plmn
+name: Example unused PLMN
+matches:
+  - mcc: "234"
+    mnc: "99"
+overrides:
+  epdg: epdg.mnc099.mcc234.example.test
+  realm: ims.mnc099.mcc234.example.test
+  ims_af: v4
+  probe_order:
+    - v4
+    - dual
+    - v6
+  pani_country: GB
+  pani_bssid_policy: placeholder
+  smsc: "+447700900000"
+source:
+  kind: manual
+  note: Documentation fixture for IPv4-first probing.

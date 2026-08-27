@@ -2,6 +2,74 @@
 
 All notable changes follow Keep a Changelog and Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- amd64 is a first-class Release path. CI builds a native amd64 Engine image; the
+  updater and `install.sh` download or build the host architecture and refuse to
+  install an ARM64 Engine on amd64 (upstream #13). GHCR `:vX.Y.Z` stays ARM64;
+  amd64 uses `:vX.Y.Z-amd64` and the matching Release tarball. Local rebuild:
+  `docker build --platform linux/amd64 -t mdd-sim-gateway/engine engine`.
+
+- `install.sh doctor` / `python -m control.app.doctor` checks Docker, ModemManager
+  or mmcli, pcscd, TUN/XFRM, Engine image architecture and the data directory.
+  Output never includes tokens, passwords or subscriber identifiers.
+
+- Modem engineering panel on the existing 4G / hardware pages: AT terminal with redacted
+  history, module-side USSD (`AT+CUSD` / ModemManager 3GPP USSD), live RSRP/RSRQ/SINR,
+  access technology, band and channel, network scan plus automatic/manual operator select,
+  USB net composition, and a modem restart that waits for live radio state.
+
+- Cellular service codes on the softphone now use the module USSD path instead of being
+  refused or dialled as a voice call. VoWiFi service codes are unchanged (IMS / 3GPP 24.390).
+
+- eSIM Load can stop VoWiFi on the same reader before lpac takes exclusive PC/SC.
+  Profile enable/switch then rebinds the same logical line to the new ICCID
+  (case-insensitive), rebuilds a draft if needed, and leaves VoWiFi off so the
+  operator turns it back on. A leftover foreign card is a recoverable
+  `card_mismatch` (409); LPA and a running engine cannot share a reader
+  (`reader_busy`). Chip info surfaces SAS / CI certificates that lpac already
+  returns in EUICCInfo2.
+
+- Carrier interoperability profiles owned by this repo (YAML/JSON). A profile can
+  override ePDG host/realm, IMS address family, PANI country/BSSID policy, SMSC,
+  APN, IDr mode and the IPv4/IPv6 probe order. Default remains the 3GPP
+  IMSI-derived FQDN when nothing matches. Optional IPCC import maps only those
+  fields from a user-supplied bundle. Each line records whether the last SMS
+  used IMS or cellular and shows a visible error when a path fails.
+
+### Changed
+
+- After a successful update, unused prior Engine tags are removed. Cleanup fails
+  closed if it would delete the running tag or cannot read live containers
+  (upstream #15).
+
+- Control-plane HTTP routes for devices, lines, SMS, eSIM, carrier profiles and
+  modem engineering now live under `control/app/routers/`. `control.app.main`
+  still re-exports the same handler names so existing tests and patches keep
+  working.
+
+### Fixed
+
+- Cellular SMS send no longer depends on `mmcli --messaging-create-sms-with-text`. On
+  ModemManager 1.20 (Ubuntu 22.04) that flag does not exist, so every 4G SMS failed with
+  `error: no actions specified`. Create now falls back to D-Bus `Messaging.Create`, which
+  is present on 1.20 and keeps the message body out of mmcli's comma-separated parser.
+
+- Line identity is a case-insensitive ICCID. PC/SC stores lowercase hex and ModemManager
+  often returns the same digits in uppercase, so 4G SMS send and receive missed every card
+  whose ICCID contained a letter. Matching, local-send tracking and SIM decode now treat
+  those spellings as the same card.
+
+- Turning VoWiFi off and then swapping the SIM no longer leaves a dead draft whose
+  toggles stay greyed out. The existing line is rebound to the new ICCID, a complete draft
+  is promoted without starting the engine, and the VoWiFi switch stays usable so the
+  operator can recover from the UI.
+
+- Flight mode, USB net composition and modem restart now publish the module readback.
+  A successful write is no longer shown as ON while the radio is still off.
+
 ## [1.5.2] - 2026-08-26
 
 ### Fixed

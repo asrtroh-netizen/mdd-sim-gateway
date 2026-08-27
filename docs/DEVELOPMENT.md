@@ -61,8 +61,9 @@ git log --oneline -3              # 它的基线是什么
 
 ```
 python -m unittest discover -s tests          # 全套，不是只跑相关的
-python -m py_compile control/app/*.py engine/*.py host/*.py
-sh -n install.sh engine/entrypoint.sh
+python -m py_compile control/app/*.py control/app/routers/*.py engine/*.py host/*.py
+sh -n install.sh engine/entrypoint.sh tools/engine-fingerprint.sh
+python3 -m control.app.doctor                 # 或缺件时退出 1；不含 secrets
 sh tools/check-subscriber-identifiers.sh      # 退出码必须为 0
 cd webui && npm run build                     # 触及 WebUI 时
 ```

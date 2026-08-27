@@ -598,6 +598,9 @@ ensure_engine_image() {
     identity=$(docker image inspect "$distributed" --format \
       '{{.Architecture}}|{{index .Config.Labels "org.opencontainers.image.version"}}|{{index .Config.Labels "io.mdd-sim-gateway.runtime-fp"}}|{{index .Config.Labels "io.mdd-sim-gateway.base-fp"}}' 2>/dev/null || true)
     expected="$expected_arch|$expected_version|$runtime_fp|$base_fp"
+    image_arch=$(printf '%s' "$identity" | awk -F'|' '{print $1}')
+    [ "$image_arch" = "$expected_arch" ] || \
+      die "refusing to install ${image_arch:-unknown} engine image on $expected_arch host"
     [ "$identity" = "$expected" ] || \
       die "distributed engine image identity mismatch: ${identity:-unreadable}"
     if [ "$have_image" = 1 ]; then
@@ -615,6 +618,9 @@ ensure_engine_image() {
     image_runtime=$(engine_image_label "$ENGINE_IMAGE" io.mdd-sim-gateway.runtime-fp)
     image_base=$(engine_image_label "$ENGINE_IMAGE" io.mdd-sim-gateway.base-fp)
     if [ "$image_base" = "$base_fp" ] && [ "$image_runtime" = "$runtime_fp" ]; then
+      reuse_arch=$(docker image inspect "$ENGINE_IMAGE" --format '{{.Architecture}}' 2>/dev/null || true)
+      [ "$reuse_arch" = "$(host_arch)" ] || \
+        die "refusing to reuse ${reuse_arch:-unknown} engine image on $(host_arch) host"
       info "engine image $ENGINE_IMAGE matches this checkout — reusing"
       return
     fi
@@ -653,6 +659,7 @@ ensure_engine_image() {
     # argument vector incrementally so repository URLs remain one quoted argument.
     set -- docker build
     [ -n "$NOCACHE_FLAG" ] && set -- "$@" "$NOCACHE_FLAG"
+    set -- "$@" --platform "linux/$(host_arch)"
     set -- "$@" --build-arg "PCSC_VERSION=$PCSC_VERSION" \
       --build-arg "RUNTIME_FP=$runtime_fp" --build-arg "BASE_FP=$base_fp" \
       --build-arg "MDD_VERSION=$(tr -d '\n' < "$REPO_DIR/VERSION")"
@@ -666,7 +673,26 @@ ensure_engine_image() {
     docker tag "$ENGINE_IMAGE" "$ENGINE_BASE_TAG" >/dev/null 2>&1 || true
     ENGINE_IMAGE_CHANGED=1
   fi
+  built_arch=$(docker image inspect "$ENGINE_IMAGE" --format '{{.Architecture}}' 2>/dev/null || true)
+  [ "$built_arch" = "$(host_arch)" ] || \
+    die "refusing to keep ${built_arch:-unknown} engine image on $(host_arch) host"
   info "engine image built"
+}
+
+# After a successful Engine replacement, drop unused prior tags. Fail closed if the
+# running tag would be deleted (upstream #15). Uses the same Python as reload.
+cleanup_engine_leftovers() {
+  py=""
+  if [ -x "$VENV_DIR/bin/python" ]; then
+    py="$VENV_DIR/bin/python"
+  elif have python3; then
+    py=python3
+  else
+    warn "python3 not found — skipped engine leftover cleanup"
+    return 0
+  fi
+  "$py" "$REPO_DIR/host/engine_images.py" cleanup || \
+    die "engine leftover cleanup refused (running image would be deleted, or docker inspect failed)"
 }
 
 # v1.4.1's updater deliberately invokes the newly applied installer with --no-engines because
@@ -716,7 +742,7 @@ engine_overlay_build() {
   fi
   docker image inspect "$ENGINE_IMAGE" >/dev/null 2>&1 && \
     docker tag "$ENGINE_IMAGE" "$ENGINE_IMAGE:previous" >/dev/null 2>&1
-  docker build --build-arg "BASE_IMAGE=$overlay_base" \
+  docker build --platform "linux/$(host_arch)" --build-arg "BASE_IMAGE=$overlay_base" \
     --build-arg "RUNTIME_FP=$overlay_runtime_fp" --build-arg "BASE_FP=$overlay_base_fp" \
     --build-arg "MDD_VERSION=$(tr -d '\n' < "$REPO_DIR/VERSION")" \
     -t "$ENGINE_IMAGE" -f "$REPO_DIR/engine/Dockerfile.overlay" "$REPO_DIR/engine"
@@ -1126,6 +1152,7 @@ cmd_install() {
   fi
   run_orchestrator
   rm -f "$ENGINE_HANDOFF_MANIFEST"
+  cleanup_engine_leftovers
   DATA_ABS=$(data_dir_abs)
   LAN_IP="${MDD_ADVERTISE_ADDR:-$(detect_lan_ip)}"
   printf '\n'
@@ -1225,6 +1252,9 @@ cmd_reload() {
     fi
   fi
   rm -f "$ENGINE_HANDOFF_MANIFEST"
+  if [ "$ENGINE_IMAGE_CHANGED" = 1 ]; then
+    cleanup_engine_leftovers
+  fi
   info "reload complete (data preserved)"
 }
 
@@ -1393,6 +1423,21 @@ PY
   else
     printf '(no pyscard venv and no pcsc_scan — install pcsc-tools to list readers)\n'
   fi
+}
+
+cmd_doctor() {
+  resolve_mode
+  py=""
+  if [ -x "$VENV_DIR/bin/python" ]; then
+    py="$VENV_DIR/bin/python"
+  elif have python3; then
+    py=python3
+  else
+    die "python3 is required for doctor"
+  fi
+  info "MDD Sim Gateway doctor — host $(host_arch), mode ${MODE:-unknown}"
+  PYTHONPATH="$REPO_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+    MDD_DATA="$MDD_DATA_DIR" "$py" -m control.app.doctor
 }
 
 cmd_diagnose() {
@@ -1792,6 +1837,7 @@ ${B}MDD Sim Gateway installer${N}
   $0 uninstall [--purge]  remove MDD containers/images/service (--purge also deletes data+venv)
   $0 status               show mode + component status
   $0 diagnose             print a masked card-path report (readers, bridges, lpac, logs)
+  $0 doctor               check Docker, mmcli, pcscd, TUN/XFRM, engine arch, data dir
   $0 reset-admin          reset the local administrator (old credential file is backed up)
   $0 logs                 follow control-plane logs
   $0 vpcd                 rebuild the virtual smart-card driver with enough card slots
@@ -1848,6 +1894,7 @@ case "$CMD" in
   uninstall)          cmd_uninstall ;;
   status)             cmd_status ;;
   diagnose)           cmd_diagnose ;;
+  doctor)             cmd_doctor ;;
   reset-admin)        cmd_reset_admin ;;
   logs)               cmd_logs ;;
   build-lpac)         cmd_build_lpac ;;
