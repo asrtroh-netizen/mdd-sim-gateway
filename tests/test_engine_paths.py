@@ -79,6 +79,35 @@ class EnginePathTests(unittest.TestCase):
         self.assertNotIn("5060/udp", bindings)
         self.assertNotIn("5061/tcp", bindings)
 
+    def test_external_sip_ports_are_published_when_local_yaml_allows(self):
+        engine = self.engine_module()
+        captured = {}
+
+        class _Containers:
+            def get(self, name):
+                raise engine.docker.errors.NotFound(name)
+
+            def run(self, image, **kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(id="container-id", name=kwargs.get("name", ""))
+
+        client = SimpleNamespace(containers=_Containers())
+        inst = {"id": "sim1", "ports": {"sip_udp": 5060, "sip_tls": 5061, "webrtc": 8089,
+                                        "ami": 5038, "rtp_start": 10000, "rtp_span": 12}}
+        with tempfile.TemporaryDirectory() as temp, \
+                patch.object(engine, "_client", lambda: client), \
+                patch.object(engine, "_instance_paths", lambda iid: (temp, temp)), \
+                patch.object(engine, "_clear_runtime_state", lambda base: None), \
+                patch.object(engine.egress, "ensure_line", lambda i, s: None), \
+                patch.object(engine.cfg, "write_instance_json", lambda i, s: None), \
+                patch.object(engine.cfg, "allow_external_sip", return_value=True):
+            engine.start(inst, {})
+
+        bindings = captured["ports"]
+        self.assertEqual(bindings["5060/udp"], 5060)
+        self.assertEqual(bindings["5060/tcp"], 5060)
+        self.assertEqual(bindings["5061/tcp"], 5061)
+
     def test_default_engine_has_no_host_ami_mapping_and_uses_configured_rtp_span(self):
         engine = self.engine_module()
         captured = {}

@@ -31,10 +31,10 @@ from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import config as cfg
-from . import (store, engine, status as status_mod, sim, card, notify_push, lpa, auth,
-               estkme, usbreader, egress, device_state, operations, update_check, cellular_sms,
-               sysinfo, failover, carrier_id, allowance, cellular_call, sms_pdu, ussd,
-               identity, modem_engineering, esim_lifecycle, carrier_profile,
+from . import (store, engine, status as status_mod, sim, card, notify_push, notify_commands,
+               lpa, auth, estkme, usbreader, egress, device_state, operations, update_check,
+               cellular_sms, sysinfo, failover, carrier_id, allowance, cellular_call, sms_pdu,
+               ussd, identity, modem_engineering, esim_lifecycle, carrier_profile,
                carrier_ipcc)
 from .version import VERSION
 from .ami import AmiClient
@@ -671,7 +671,7 @@ def _start_engine_checked(inst: dict, settings: dict, dev_mounts: bool = False,
         raise HTTPException(409, {
             "code": "line_limit",
             "message": (f"MDD Sim Gateway supports at most "
-                        f"{cfg.MAX_SIM_LINES} SIM lines. Delete an existing line "
+                        f"{cfg.max_sim_lines()} SIM lines. Delete an existing line "
                         "before starting this one."),
         })
     try:
@@ -1004,8 +1004,9 @@ def _auto_promote_card_draft(inst: dict, card_info: dict, cards: list[dict],
         "imeisv": cfg.imeisv_from_imei(imei, svn=svn),
         "reader": f"imsi:{imsi}",
         "sip": sip,
-        # Production logs must not expose IMS-AKA material through Asterisk debug output.
-        "debug": {**(inst.get("debug") or {}), "asterisk": False},
+        # Production logs must not expose IMS-AKA material through Asterisk debug output
+        # unless the host-local persist flag keeps a saved value.
+        "debug": cfg.apply_asterisk_debug(inst.get("debug")),
     }
     virtual = card_info.get("virtual_slots") or []
     if virtual:
@@ -2334,6 +2335,10 @@ async def lifespan(app: FastAPI):
     host_poller = asyncio.create_task(host_health_poller())
     segment_reaper = asyncio.create_task(sms_segment_reaper())
     update_poller = asyncio.create_task(update_automation_poller())
+    command_poller = asyncio.create_task(notify_commands.poller(
+        send_sms=send_sms_on_line, place_call=place_call_on_line,
+        hangup=hangup_on_line, line_status=_cached_line_status,
+        audit=_write_audit_record))
     for iid in recovered_modem_lines:
         asyncio.create_task(_auto_start_hotplugged_line(iid))
     yield
@@ -2343,10 +2348,12 @@ async def lifespan(app: FastAPI):
     host_poller.cancel()
     segment_reaper.cancel()
     update_poller.cancel()
+    command_poller.cancel()
     # Reap the cancelled tasks (the monitor may be parked in a to_thread wait for up to
     # its timeout; awaiting keeps shutdown deterministic instead of leaking the error).
     await asyncio.gather(poller, monitor, sms_poller, host_poller,
-                         segment_reaper, update_poller, return_exceptions=True)
+                         segment_reaper, update_poller, command_poller,
+                         return_exceptions=True)
     await hub.runtime.close()
     for c in hub.ami.values():
         await c.close()
@@ -3288,9 +3295,8 @@ async def api_provision(body: dict):
         # 'v6' Telus/EE, 'v4' Vodafone UK, 'dual'. Normalised in config.render_instance_json.
         "cp_mode": cfg.normalize_cp_mode(body.get("cp_mode", "")),
         # Full Asterisk debug writes SIP identities and authentication headers to the container
-        # log. Nothing the control plane does needs it: the line number is read from the
-        # identity Asterisk announces for its own registrations.
-        "debug": {**(body.get("debug") or {}), "asterisk": False},
+        # log. Forced off unless the host-local persist flag keeps a saved value.
+        "debug": cfg.apply_asterisk_debug(body.get("debug")),
     }
     # A modem is represented as one UI device but has three internal logical channels so PIN
     # keeping, SWu authentication and Asterisk/SMS can operate independently. Native readers
@@ -3814,9 +3820,8 @@ def api_put_settings(body: dict):
             notify_push.build_webhook_request(webhook, sample)
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             raise HTTPException(400, f"invalid webhook configuration: {exc}")
-    # Telegram is notification-only. Ignore stale clients that
-    # still submit a remote command configuration.
-    (body.get("telegram") or {}).pop("commands", None)
+    # Telegram commands stay dropped unless the host-local flag (or this save) unlocks them.
+    body = cfg.prepare_settings_payload(body)
     pushplus = body.get("pushplus") or {}
     if pushplus.get("enabled"):
         if not str(pushplus.get("token") or "").strip():

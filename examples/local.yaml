@@ -1,0 +1,19 @@
+# Host-local operator overrides for THIS machine only.
+# Copy to $MDD_DATA/local.yaml (same directory as config.yaml) and restart
+# the control plane, or toggle the same four fields on 系统设置 and Save.
+# The WebUI reads and writes this file; editing it off-UI also works.
+# This file is never a Settings "unlock" page and is not shipped inside config.yaml.
+
+# SIM line cap. Default without this file is 5. Absolute ceiling is 32.
+max_sim_lines: 8
+
+# Persist and render sip.external so MicroSIP / a desk phone / a local Asterisk
+# trunk can register. Credentials stay in config.yaml (0600).
+allow_external_sip: true
+
+# Keep settings.telegram.commands and honor /status /sms /call /hangup on
+# this box's own configured lines only. Token and chat_id stay in Settings.
+allow_telegram_commands: true
+
+# Honor a saved per-line or settings debug.asterisk flag so IMS traces survive save.
+persist_asterisk_debug: true

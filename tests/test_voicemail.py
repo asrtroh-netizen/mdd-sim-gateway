@@ -40,6 +40,10 @@ class DialplanTests(unittest.TestCase):
         self.assertNotIn("Record(", out)
         self.assertNotIn("[mdd_voicemail]", out)
 
+    def test_standalone_sip_accounts_ring_with_the_browser_softphone(self):
+        out = render(vm_enabled=False, sip_external=[{"username": "desk"}])
+        self.assertIn("same => n,Dial(PJSIP/webrtc&PJSIP/desk,60)", out)
+
     def test_enabled_replaces_the_ring_timeout_and_branches_to_the_recorder(self):
         out = render(vm_enabled=True)
         self.assertIn("same => n,Dial(PJSIP/webrtc,25)", out)

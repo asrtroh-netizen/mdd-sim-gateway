@@ -173,3 +173,49 @@ username={{ webrtc_user }}
 password={{ webrtc_password }}
 [{{ webrtc_user }}](aor-local)
 {% endif %}
+
+{% if sip_external %}
+; ================= Standalone SIP phones / trunks (UDP / TCP / TLS) =================
+; Published to the host only when local.yaml allow_external_sip is on. Credentials live
+; in config.yaml (0600). Transport names must stay stable so a desk phone can keep
+; registering after an engine rebuild.
+[transport-udp]
+type=transport
+protocol=udp
+bind={{ sip_listen }}:5060
+{% if local_ext %}
+external_media_address={{ local_ext }}
+external_signaling_address={{ local_ext }}
+{% endif %}
+
+[transport-tcp]
+type=transport
+protocol=tcp
+bind={{ sip_listen }}:5060
+{% if local_ext %}
+external_media_address={{ local_ext }}
+external_signaling_address={{ local_ext }}
+{% endif %}
+
+[transport-tls]
+type=transport
+protocol=tls
+bind={{ sip_listen }}:5061
+cert_file=/etc/asterisk/certificate.crt
+priv_key_file=/etc/asterisk/certificate.key
+{% if local_ext %}
+external_media_address={{ local_ext }}
+external_signaling_address={{ local_ext }}
+{% endif %}
+
+{% for acc in sip_external %}
+[{{ acc.username }}](endpoint-local)
+auth=auth-{{ acc.username }}
+aors={{ acc.username }}
+transport=transport-{{ acc.transport | default('udp') }}
+[auth-{{ acc.username }}](auth-local)
+username={{ acc.username }}
+password={{ acc.password }}
+[{{ acc.username }}](aor-local)
+{% endfor %}
+{% endif %}

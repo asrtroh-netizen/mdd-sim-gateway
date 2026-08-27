@@ -32,6 +32,9 @@ sudo ./install.sh install --mode docker   # 控制面也运行在 Docker
 
 安装完成后，在受信的局域网或 VPN 中立即打开 `https://主机地址:8443`，创建至少 10 字符的管理员密码。首次设置完成前，任何能访问该端口的客户端都可申领初始管理员。配置自有证书时，证书和私钥应只允许 root 读取。运行数据目录默认为 `0700`，凭据文件为 `0600`。
 
+本机线路上限、独立 SIP、Telegram 远程命令和 Asterisk 调试持久化写在
+`$MDD_DATA/local.yaml`，也可在系统设置里改。说明见 [本机限制](LOCAL.md)。
+
 ## 更新
 
 系统设置可在“自动更新”和“提示更新”中二选一，并分别选择全部版本或主版本。主版本不按版本号推断，而由 `update-policy.json` 的 `release.kind` 明确标记为 `main`；其他版本标记为 `patch`。新安装默认自动更新主版本；自动模式不再发送发现新版本提示，匹配的版本仍必须由同一策略文件单独标记为稳定、匹配完全相同的版本并到达 `not_before` 时间，单纯发布 Release 不会触发安装。提示模式默认提示全部版本，左下角版本号出现红点后，由管理员查看说明并确认“立即升级”。更新时控制面把请求写入编排器目录，主机上的 `mdd-sim-gateway-orchestrator` 以独立的临时 systemd 单元（`mdd-sim-gateway-update`）运行 `host/mdd_update.py` —— 下载对应 `vX.Y.Z` Release 资产、校验 SHA-256 和版本，并比较新源码与本机 Engine 指纹。Engine 输入发生变化时，更新器通过同一条直连或代理回退线路下载该版本、与主机架构匹配的 Engine 资产，校验后导入 Docker，再核对架构、版本和两类指纹；资产架构不对则拒绝安装。输入未变化时不会重复下载。备份与覆盖源码后，安装器保存旧 Engine 的 `:previous` 回滚标签，启用新镜像并只重建旧镜像上的线路，控制面重新扫描在位 SIM 使线路自愈。成功后删除未在使用的旧 Engine 标签，但不会删掉正在运行的标签。Docker 控制面模式还会取得已校验的、同架构控制镜像资产并执行 `docker load`。`data/`、`.env`、`.git` 和虚拟环境均保留。日志见 `journalctl -u mdd-sim-gateway-update`、数据目录下 `update/reload.log` 与 `update/engine-image.log`。

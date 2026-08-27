@@ -115,8 +115,10 @@ cd webui && npm run build                     # 触及 WebUI 时
 **改动真实设备前先确认。** 部署、重启线路、启用会改变来电行为的功能，都要先说明影响再动手；
 已获授权的操作范围不自动延伸到下一次。
 
-**产品边界写在代码里，不要绕过。** 线路上限、禁止外部 SIP 账号、通知单向不可远程控制——
-这些由 `tests/test_product_boundaries.py` 强制，触碰前先读它。
+**产品边界写在代码里，不要绕过。** 没有 `$MDD_DATA/local.yaml` 时，线路上限仍是 5、
+禁止外部 SIP 账号、通知单向不可远程控制、Asterisk 调试不落盘——这些由
+`tests/test_product_boundaries.py` 强制。本机放宽只走 `local.yaml` / 系统设置那四个字段，
+触碰前先读测试。
 
 ## 7. 与仓库外部资料的边界
 

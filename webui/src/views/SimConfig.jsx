@@ -36,10 +36,19 @@ export default function SimConfig({ instances, selected, refresh, cards, setSele
   // Only to label the "use the system default" option with what that default currently is,
   // so the choice does not require a trip to the settings page to interpret.
   const [systemDefaultVm, setSystemDefaultVm] = useState(false)
+  const [localFlags, setLocalFlags] = useState({
+    allow_external_sip: false, persist_asterisk_debug: false,
+  })
   useEffect(() => {
     let cancelled = false
-    api.settings().then((s) => { if (!cancelled) setSystemDefaultVm(!!s.vm_enabled) })
-      .catch(() => {})
+    api.settings().then((s) => {
+      if (cancelled) return
+      setSystemDefaultVm(!!s.vm_enabled)
+      setLocalFlags({
+        allow_external_sip: !!s.allow_external_sip,
+        persist_asterisk_debug: !!s.persist_asterisk_debug,
+      })
+    }).catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -368,6 +377,34 @@ export default function SimConfig({ instances, selected, refresh, cards, setSele
             onChange={(e) => updSip({ webrtc: { ...form.sip.webrtc, enable: e.target.checked } })} />
           {t('Enable browser softphone (WebRTC)')}
         </label>
+        {localFlags.allow_external_sip && <>
+          <h4 style={{ marginBottom: 6, marginTop: 18 }}>{t('Standalone SIP accounts')}</h4>
+          {(form.sip.external || []).map((account, index) => (
+            <div className="u-form-grid" key={index} style={{ marginTop: 8 }}>
+              <div><label>{t('SIP username')}</label>
+                <input className="mono" value={account.username || ''} onChange={(e) => {
+                  const external = [...(form.sip.external || [])]
+                  external[index] = { ...external[index], username: e.target.value }
+                  updSip({ external })
+                }} /></div>
+              <div><label>{t('SIP password')}</label>
+                <input type="password" className="mono" value={account.password || ''} onChange={(e) => {
+                  const external = [...(form.sip.external || [])]
+                  external[index] = { ...external[index], password: e.target.value }
+                  updSip({ external })
+                }} /></div>
+            </div>
+          ))}
+          <button className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => updSip({
+            external: [...(form.sip.external || []), { username: '', password: '', transport: 'udp' }],
+          })}>{t('Add SIP account')}</button>
+        </>}
+        {localFlags.persist_asterisk_debug && <label style={{ marginTop: 12 }}>
+          <input type="checkbox" style={{ width: 'auto', marginRight: 8 }}
+            checked={!!form.debug?.asterisk}
+            onChange={(e) => setForm((f) => ({ ...f, debug: { ...f.debug, asterisk: e.target.checked } }))} />
+          {t('Asterisk verbose/debug logging')}
+        </label>}
 
         <h4 style={{ marginBottom: 6, marginTop: 18 }}>{t('Voicemail')}</h4>
         <p style={{ fontSize: 11, color: 'var(--text-mute)', margin: '0 0 6px', lineHeight: 1.5 }}>

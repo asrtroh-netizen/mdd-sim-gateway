@@ -211,6 +211,12 @@ def build_context(cfg):
         "rtp_end": cfg.get("rtp_end", 11000),
         "debug_asterisk": cfg.get("debug", {}).get("asterisk", False),
         "debug_charon": cfg.get("debug", {}).get("charon", False),
+        # Standalone SIP accounts (MicroSIP / desk phone / local Asterisk trunk). Empty unless
+        # the control plane persisted sip.external after local.yaml allowed it.
+        "sip_external": [
+            account for account in (sip.get("external") or [])
+            if isinstance(account, dict) and account.get("username") and account.get("password")
+        ],
     }
     return ctx
 

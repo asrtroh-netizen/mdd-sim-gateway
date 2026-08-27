@@ -308,9 +308,18 @@ enable_pcscd_autostart() {
 
 data_dir_abs() { CDPATH= cd -- "$MDD_DATA_DIR" 2>/dev/null && pwd -P || printf '%s' "$MDD_DATA_DIR"; }
 
+# Seed $MDD_DATA/local.yaml from the example only when the operator has not created one.
+seed_local_yaml() {
+  install -d -m 0700 "$MDD_DATA_DIR"
+  if [ ! -f "$MDD_DATA_DIR/local.yaml" ] && [ -f "$REPO_DIR/examples/local.yaml" ]; then
+    install -m 0600 "$REPO_DIR/examples/local.yaml" "$MDD_DATA_DIR/local.yaml"
+  fi
+}
+
 # ------------------------------------------------------------------ deploy-mode state
 persist_mode() {
   mkdir -p "$MDD_DATA_DIR"
+  seed_local_yaml
   install -d -m 0755 "$(dirname -- "$DATA_DIR_STATE")"
   printf '%s\n' "$(data_dir_abs)" > "$DATA_DIR_STATE"
   chmod 0644 "$DATA_DIR_STATE"
@@ -855,6 +864,7 @@ setup_venv() {
 run_control_local() {
   have systemctl || die "local mode needs systemd (systemctl not found). Re-run with --mode docker."
   install -d -m 0700 "$MDD_DATA_DIR"
+  seed_local_yaml
   DATA_ABS=$(data_dir_abs)
   LAN_IP="$MDD_ADVERTISE_ADDR"
   [ -z "$LAN_IP" ] && LAN_IP=$(detect_lan_ip)
@@ -1062,6 +1072,7 @@ remove_orchestrator() {
 # ------------------------------------------------------------------ containerized control plane
 run_control() {
   install -d -m 0700 "$MDD_DATA_DIR"
+  seed_local_yaml
   DATA_ABS=$(data_dir_abs)
   LAN_IP="$MDD_ADVERTISE_ADDR"
   [ -z "$LAN_IP" ] && LAN_IP=$(detect_lan_ip)

@@ -6,6 +6,13 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Added
 
+- Host-local `$MDD_DATA/local.yaml` (also on 系统设置 → 常规) can raise the
+  five-line cap (ceiling 32), persist standalone SIP accounts, honor Telegram
+  `/status` `/sms` `/call` `/hangup` on this box's own lines, and keep a saved
+  Asterisk debug flag. Without the file the old four limits stay in force.
+  `examples/local.yaml` is copied into a new data directory only when the file
+  does not already exist.
+
 - amd64 is a first-class Release path. CI builds a native amd64 Engine image; the
   updater and `install.sh` download or build the host architecture and refuse to
   install an ARM64 Engine on amd64 (upstream #13). GHCR `:vX.Y.Z` stays ARM64;
