@@ -195,12 +195,17 @@ def cleanup_unused_engine_images(
     kept: list[str] = []
     for item in images:
         ref = item["ref"]
-        if ref in PROTECTED_TAGS or ref in protected_refs or item["id"] in protected_ids:
+        if ref in PROTECTED_TAGS or ref in protected_refs:
             kept.append(ref)
             continue
+        # Extra tags that still point at the live/current image must not be
+        # untagged — docker rmi on that ID would delete the running tag.
         if item["id"] in running_ids or item["id"] == current_id:
             raise EngineImageError(
                 f"refusing to delete engine tag {ref}: it is the running image")
+        if item["id"] in protected_ids:
+            kept.append(ref)
+            continue
         deleted = _run(["docker", "rmi", ref], runner)
         if deleted.returncode != 0:
             detail = (deleted.stderr or deleted.stdout or "docker rmi failed").strip()
