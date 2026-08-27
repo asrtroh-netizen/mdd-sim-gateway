@@ -226,6 +226,15 @@ def init():
                     listened INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE INDEX IF NOT EXISTS idx_voicemails_inst ON voicemails(instance, ts);
+                CREATE TABLE IF NOT EXISTS sms_routes (
+                    instance TEXT PRIMARY KEY,
+                    transport TEXT NOT NULL,
+                    requested_transport TEXT NOT NULL DEFAULT 'auto',
+                    ok INTEGER NOT NULL,
+                    uncertain INTEGER NOT NULL DEFAULT 0,
+                    error TEXT NOT NULL DEFAULT '',
+                    ts INTEGER NOT NULL
+                );
                 """
             )
             # migration: per-message failure detail (added later)
@@ -1409,3 +1418,49 @@ def clear_line_states(instance: str) -> int:
     with _lock, _conn() as c:
         cur = c.execute("DELETE FROM line_states WHERE instance=?", (str(instance),))
         return cur.rowcount
+
+
+def record_sms_route(instance: str, *, transport: str, requested_transport: str = "auto",
+                     ok: bool, uncertain: bool = False, error: str = "") -> dict:
+    """Remember the last IMS vs cellular SMS attempt for a line (including failures)."""
+    row = {
+        "instance": str(instance),
+        "transport": str(transport or ""),
+        "requested_transport": str(requested_transport or "auto"),
+        "ok": bool(ok),
+        "uncertain": bool(uncertain),
+        "error": str(error or ""),
+        "ts": int(time.time()),
+    }
+    with _lock, _conn() as c:
+        c.execute(
+            "INSERT INTO sms_routes(instance,transport,requested_transport,ok,uncertain,error,ts) "
+            "VALUES(?,?,?,?,?,?,?) "
+            "ON CONFLICT(instance) DO UPDATE SET "
+            "transport=excluded.transport, requested_transport=excluded.requested_transport, "
+            "ok=excluded.ok, uncertain=excluded.uncertain, error=excluded.error, ts=excluded.ts",
+            (row["instance"], row["transport"], row["requested_transport"],
+             int(row["ok"]), int(row["uncertain"]), row["error"], row["ts"]))
+    return row
+
+
+def last_sms_route(instance: str) -> dict | None:
+    with _lock, _conn() as c:
+        try:
+            row = c.execute(
+                "SELECT instance,transport,requested_transport,ok,uncertain,error,ts "
+                "FROM sms_routes WHERE instance=?",
+                (str(instance),)).fetchone()
+        except sqlite3.OperationalError:
+            return None
+    if not row:
+        return None
+    return {
+        "instance": row["instance"],
+        "transport": row["transport"],
+        "requested_transport": row["requested_transport"],
+        "ok": bool(row["ok"]),
+        "uncertain": bool(row["uncertain"]),
+        "error": row["error"] or "",
+        "ts": int(row["ts"] or 0),
+    }

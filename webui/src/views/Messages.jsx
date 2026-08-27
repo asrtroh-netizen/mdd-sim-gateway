@@ -33,6 +33,7 @@ export default function Messages({ selected, subscribe, showToast, instances, ca
     && device.device_type === 'modem'
     && String(device.instance_id || '') === String(id || ''))
   const cellularAvailable = Boolean(selectedDevice)
+  const lastSms = (instances || []).find((item) => String(item.id) === String(id || ''))?.last_sms
 
   const loadThreads = useCallback(async (showLoading = false) => {
     if (!id) return
@@ -282,7 +283,7 @@ export default function Messages({ selected, subscribe, showToast, instances, ca
                   <div style={{ fontSize: 10, color: statusColor,
                     textAlign: m.direction === 'out' ? 'right' : 'left', marginTop: 2 }}>
                     {new Date(m.ts * 1000).toLocaleString()}
-                    {m.transport === 'cellular' ? ` · ${tr('4G SMS')}` : ''}
+                    {m.transport === 'cellular' ? ` · ${tr('4G SMS')}` : ` · ${tr('IMS SMS')}`}
                     {statusText}
                   </div>
                   {failed && m.error && (
@@ -298,6 +299,18 @@ export default function Messages({ selected, subscribe, showToast, instances, ca
             )
           })}
         </div>
+        {lastSms && (
+          <div style={{
+            padding: '8px 12px', borderTop: '1px solid var(--border)', fontSize: 12,
+            color: lastSms.ok ? 'var(--text-dim)' : '#b91c1c',
+            background: lastSms.ok ? 'transparent' : 'color-mix(in srgb, #ef4444 8%, var(--panel))',
+          }}>
+            {tr('Last SMS used {path}', {
+              path: lastSms.transport === 'cellular' ? tr('4G SMS') : tr('IMS SMS'),
+            })}
+            {lastSms.ok ? '' : ` — ${lastSms.error || tr('that path failed')}`}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-mute)', whiteSpace: 'nowrap' }}>
             {tr('Send via')}

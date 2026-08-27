@@ -33,7 +33,8 @@ from . import config as cfg
 from . import (store, engine, status as status_mod, sim, card, notify_push, lpa, auth,
                estkme, usbreader, egress, device_state, operations, update_check, cellular_sms,
                sysinfo, failover, carrier_id, allowance, cellular_call, sms_pdu, ussd,
-               identity, modem_engineering, esim_lifecycle)
+               identity, modem_engineering, esim_lifecycle, carrier_profile,
+               carrier_ipcc)
 from .version import VERSION
 from .ami import AmiClient
 from .runtime import RuntimeRegistry
@@ -4568,6 +4569,17 @@ async def api_instances():
         live_port = _reader_port_for_instance(inst)
         if live_port:
             safe["reader_port"] = live_port
+        try:
+            safe["last_sms"] = store.last_sms_route(str(inst["id"]))
+        except Exception:
+            safe["last_sms"] = None
+        overlay = {}
+        try:
+            overlay = carrier_profile.apply_to_instance(inst)
+        except Exception:
+            overlay = {}
+        if overlay.get("carrier_profile_id"):
+            safe["carrier_profile_id"] = overlay["carrier_profile_id"]
         out.append({**safe, "status": st})
     return {"instances": out}
 
@@ -5109,19 +5121,32 @@ async def send_sms_on_line(iid: str, to: str, text: str,
     lock = hub.sms_send_locks.setdefault(iid, asyncio.Lock())
     async with lock:
         if transport == "vowifi":
-            return await _send_sms_vowifi(iid, to, text)
-        if transport == "cellular":
-            return await _send_sms_cellular(iid, to, text)
-
-        ami = await _registered_vowifi_ami(iid)
-        if ami:
-            result = await _send_sms_vowifi(iid, to, text, ami=ami)
-        else:
+            result = await _send_sms_vowifi(iid, to, text)
+        elif transport == "cellular":
             result = await _send_sms_cellular(iid, to, text)
-            if result.get("unavailable"):
-                cellular_error = result.get("error") or "Cellular SMS is unavailable."
-                result["error"] = f"VoWiFi is not registered. {cellular_error}"
-        result["requested_transport"] = "auto"
+        else:
+            ami = await _registered_vowifi_ami(iid)
+            if ami:
+                result = await _send_sms_vowifi(iid, to, text, ami=ami)
+            else:
+                result = await _send_sms_cellular(iid, to, text)
+                if result.get("unavailable"):
+                    cellular_error = result.get("error") or "Cellular SMS is unavailable."
+                    result["error"] = f"VoWiFi is not registered. {cellular_error}"
+            result["requested_transport"] = "auto"
+        used = str(result.get("transport") or transport)
+        if not result.get("ok") and not result.get("error"):
+            label = "IMS / VoWiFi" if used == "vowifi" else "cellular"
+            result["error"] = f"{label} SMS failed."
+        try:
+            store.record_sms_route(
+                iid, transport=used,
+                requested_transport=str(result.get("requested_transport") or transport),
+                ok=bool(result.get("ok")),
+                uncertain=bool(result.get("uncertain")),
+                error=str(result.get("error") or ""))
+        except Exception:
+            log.debug("sms route persist failed for line %s", iid, exc_info=True)
         return result
 
 
@@ -6237,6 +6262,34 @@ def _dispatch_push(event: str, iid: str, source: str, text: str | None = None):
         asyncio.to_thread(notify_push.dispatch, settings, event, inst, source, text))
 
 
+
+
+# ----------------------------- carrier profiles -----------------------------
+@app.get("/api/carrier-profiles")
+async def api_carrier_profiles():
+    """Loaded YAML/JSON interoperability profiles (not a VoCat/IPCC dump)."""
+    return {"ok": True, "profiles": carrier_profile.loaded(),
+            "dir": carrier_profile.user_profile_dir()}
+
+
+@app.post("/api/carrier-profiles/import-ipcc")
+async def api_carrier_profiles_import_ipcc(body: dict | None = None):
+    """Map a user-supplied IPCC zip/plist on this host into the owned profile schema."""
+    body = body or {}
+    path = str(body.get("path") or "").strip()
+    if not path:
+        raise HTTPException(400, "path to a local .ipcc / .zip / .plist is required")
+    try:
+        profile = await asyncio.to_thread(
+            carrier_ipcc.import_ipcc, path,
+            profile_id=body.get("id") or None,
+            name=str(body.get("name") or ""),
+            persist=True)
+    except carrier_profile.ProfileError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"ok": True, "profile": profile}
 
 
 # ----------------------------- eSIM / LPA (lpac) -----------------------------

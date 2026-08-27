@@ -22,6 +22,13 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
   (`reader_busy`). Chip info surfaces SAS / CI certificates that lpac already
   returns in EUICCInfo2.
 
+- Carrier interoperability profiles owned by this repo (YAML/JSON). A profile can
+  override ePDG host/realm, IMS address family, PANI country/BSSID policy, SMSC,
+  APN, IDr mode and the IPv4/IPv6 probe order. Default remains the 3GPP
+  IMSI-derived FQDN when nothing matches. Optional IPCC import maps only those
+  fields from a user-supplied bundle. Each line records whether the last SMS
+  used IMS or cellular and shows a visible error when a path fails.
+
 ### Fixed
 
 - Cellular SMS send no longer depends on `mmcli --messaging-create-sms-with-text`. On

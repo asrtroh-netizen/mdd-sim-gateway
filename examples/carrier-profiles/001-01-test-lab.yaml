@@ -1,0 +1,26 @@
+# Example profile for the 3GPP reserved test network (MCC 001 / MNC 01).
+# Public / lab values only — not a live carrier, not an Apple IPCC, not VoCat.
+version: 1
+id: example-test-lab
+name: Example 3GPP test lab
+matches:
+  - mcc: "001"
+    mnc: "01"
+overrides:
+  epdg: epdg.example.test
+  realm: ims.example.test
+  ims_af: auto
+  probe_order:
+    - v6
+    - dual
+    - v4
+  pani_country: GB
+  pani_bssid_policy: derived
+  access_type: wlan1
+  user_eq_phone: true
+  smsc: "+447700900111"
+  apn: ims
+  idr_mode: apn
+source:
+  kind: manual
+  note: Documentation fixture. Copy into $MDD_DATA/carrier-profiles to activate.

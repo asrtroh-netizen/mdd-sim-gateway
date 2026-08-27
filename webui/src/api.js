@@ -140,6 +140,8 @@ export const api = {
     `/api/instances/${id}/sms/send`,
     { to, body, transport },
   ),
+  carrierProfiles: () => j('GET', '/api/carrier-profiles'),
+  importCarrierIpcc: (body) => j('POST', '/api/carrier-profiles/import-ipcc', body),
   allowance: (id) => j('GET', `/api/instances/${id}/allowance`),
   saveAllowance: (id, body) => j('PUT', `/api/instances/${id}/allowance`, body),
   allowanceQueryRule: (id) => j('GET', `/api/instances/${id}/allowance/query-rule`),

@@ -882,39 +882,53 @@ CARRIER_SIP_PROFILES = {
 }
 
 
-def carrier_sip_defaults(mcc: str, mnc: str, identity: str = "") -> dict:
+def _file_sip_hint(mcc: str, mnc: str, profile_id: str | None = None) -> dict:
+    from . import carrier_profile
+    return carrier_profile.sip_hint(mcc, mnc, profile_id)
+
+
+def carrier_sip_defaults(mcc: str, mnc: str, identity: str = "",
+                         profile_id: str | None = None) -> dict:
     """Return safe SIP presentation defaults for a characterised carrier.
 
     P-Access-Network-Info needs a plausible, stable Wi-Fi node identity. Derive a locally
     administered unicast BSSID from the SIM identity instead of using the old all-``f``
     placeholder. Only the derived BSSID is rendered; the source identity is never exposed.
+    Loaded YAML/JSON profiles win per-field over the in-tree MCC-MNC table.
     """
     keys = (
         "%s-%s" % (mcc, mnc),
         "%s-%s" % (str(mcc).zfill(3), str(mnc).zfill(3)),
         "%s-%s" % (mcc, str(mnc).lstrip("0") or mnc),
     )
-    profile = next((CARRIER_SIP_PROFILES[key] for key in keys
-                    if key in CARRIER_SIP_PROFILES), None)
-    if not profile:
+    builtin = next((CARRIER_SIP_PROFILES[key] for key in keys
+                    if key in CARRIER_SIP_PROFILES), None) or {}
+    profile = {**builtin, **_file_sip_hint(mcc, mnc, profile_id)}
+    if not profile.get("pani_country") and not profile.get("access_type"):
         return {}
     seed = str(identity or keys[0]).strip()
-    node = bytearray(hashlib.sha256(("mdd-pani:" + seed).encode("utf-8")).digest()[:6])
-    node[0] = (node[0] | 0x02) & 0xFE  # locally administered, never multicast
-    node_id = "".join("%02x" % value for value in node)
-    country = profile["pani_country"]
-    return {
-        "pani": (r'IEEE-802.11\; i-wlan-node-id="%s"\;country=%s'
-                 % (node_id, country)),
-        "access_type": profile["access_type"],
-        "user_eq_phone": bool(profile["user_eq_phone"]),
-    }
+    if profile.get("pani_bssid_policy") == "placeholder":
+        node_id = "ffffffffffff"
+    else:
+        node = bytearray(hashlib.sha256(("mdd-pani:" + seed).encode("utf-8")).digest()[:6])
+        node[0] = (node[0] | 0x02) & 0xFE  # locally administered, never multicast
+        node_id = "".join("%02x" % value for value in node)
+    country = profile.get("pani_country") or ""
+    out = {}
+    if country:
+        out["pani"] = (r'IEEE-802.11\; i-wlan-node-id="%s"\;country=%s'
+                       % (node_id, country))
+    if profile.get("access_type"):
+        out["access_type"] = profile["access_type"]
+    if "user_eq_phone" in profile:
+        out["user_eq_phone"] = bool(profile["user_eq_phone"])
+    return out
 
 
 def merge_carrier_sip_defaults(mcc: str, mnc: str, identity: str,
-                               sip: dict | None) -> dict:
+                               sip: dict | None, profile_id: str | None = None) -> dict:
     """Merge carrier SIP defaults, treating blank text fields as 'use automatic'."""
-    defaults = carrier_sip_defaults(mcc, mnc, identity)
+    defaults = carrier_sip_defaults(mcc, mnc, identity, profile_id=profile_id)
     explicit = dict(sip or {})
     for key in defaults:
         if explicit.get(key) in (None, ""):
@@ -927,18 +941,23 @@ def merge_carrier_sip_defaults(mcc: str, mnc: str, identity: str,
 CP_MODE_LADDER_DEFAULT = ["v6", "dual", "v4"]
 
 
-def cp_mode_order_for(mcc: str, mnc: str) -> str:
-    """Compute the comma-separated auto discovery ladder for a line: carrier-DB preference (matched
-    on mcc-mnc, trying both the stored MNC and its 3-digit zfill) first, then the default ladder,
-    deduped. Consumed by the engine as SWU_CP_MODE_ORDER."""
+def cp_mode_order_for(mcc: str, mnc: str, profile_id: str | None = None) -> str:
+    """Compute the comma-separated auto discovery ladder for a line: file profile, then
+    carrier-DB preference (matched on mcc-mnc, trying both the stored MNC and its 3-digit
+    zfill), then the default ladder, deduped. Consumed by the engine as SWU_CP_MODE_ORDER."""
     order = []
     pref = None
+    from . import carrier_profile
+    file_order = carrier_profile.probe_order(mcc, mnc, profile_id)
+    if file_order:
+        pref = file_order[0]
+        order.extend(file_order)
     for key in ("%s-%s" % (mcc, mnc), "%s-%s" % (str(mcc).zfill(3), str(mnc).zfill(3)),
                 "%s-%s" % (mcc, str(mnc).lstrip("0") or mnc)):
-        if key in CARRIER_CP_PREF:
+        if pref is None and key in CARRIER_CP_PREF:
             pref = CARRIER_CP_PREF[key]
             break
-    if pref:
+    if pref and pref not in order:
         order.append(pref)
     for m in CP_MODE_LADDER_DEFAULT:
         if m not in order:
@@ -949,9 +968,16 @@ def cp_mode_order_for(mcc: str, mnc: str) -> str:
 def render_instance_json(inst: dict, settings: dict) -> dict:
     """Convert a stored instance into the engine /config/instance.json contract."""
     ports = inst.get("ports", _alloc_ports(inst.get("index", 0)))
+    overlay = {}
+    try:
+        from . import carrier_profile
+        overlay = carrier_profile.apply_to_instance(inst)
+    except Exception:
+        overlay = {}
     sip = merge_carrier_sip_defaults(
         inst.get("mcc", ""), inst.get("mnc", ""),
-        inst.get("iccid") or inst.get("imsi") or inst.get("imei"), inst.get("sip"))
+        inst.get("iccid") or inst.get("imsi") or inst.get("imei"), inst.get("sip"),
+        profile_id=inst.get("carrier_profile"))
     webrtc = sip.get("webrtc", {}) or {}
     ami_secret = str(inst.get("ami_secret") or "")
     webrtc_password = str(webrtc.get("password") or "")
@@ -991,8 +1017,11 @@ def render_instance_json(inst: dict, settings: dict) -> dict:
         "reader_port": inst.get("reader_port", ""),
         "iccid": inst.get("iccid", ""),
         "msisdn": inst.get("msisdn", ""),
-        "smsc": inst.get("smsc", ""),
+        "smsc": overlay.get("smsc") or inst.get("smsc", ""),
         "pcscf": inst.get("pcscf", ""),
+        "epdg": overlay.get("epdg") or inst.get("epdg", ""),
+        "realm": overlay.get("realm") or inst.get("realm", ""),
+        "carrier_profile_id": overlay.get("carrier_profile_id") or "",
         "ami_user": inst.get("ami_user", "vowifi"),
         "ami_secret": ami_secret,
         # Where engine notify.py POSTs events. Explicit setting wins; else MDD_MANAGER_URL
@@ -1061,14 +1090,16 @@ def render_instance_json(inst: dict, settings: dict) -> dict:
         # APN 'ims'; idr_mode defaults to 'apn' (the bare-APN form most carriers' ePDGs expect and
         # the proven-safe default) and may be set to 'fqdn' for the stricter ePDGs that require the
         # operator APN-FQDN. See swu_ike.py (SWU_APN / SWU_IDR_MODE).
-        "apn": normalize_apn(inst.get("apn", "")),
-        "idr_mode": normalize_idr_mode(inst.get("idr_mode", "")),
+        "apn": normalize_apn(overlay.get("apn") or inst.get("apn", "")),
+        "idr_mode": normalize_idr_mode(overlay.get("idr_mode") or inst.get("idr_mode", "")),
         # SWu CFG request address family (must match the carrier's IMS PDN). Defaults to 'auto'
         # (discovery ladder + carrier DB); 'v6' Telus/EE, 'v4' Vodafone UK, 'dual' both. When auto,
         # cp_mode_order gives the engine the discovery ladder (carrier-DB preference first).
         # See swu_ike.py (SWU_CP_MODE / SWU_CP_MODE_ORDER).
         "cp_mode": normalize_cp_mode(inst.get("cp_mode", "")),
-        "cp_mode_order": cp_mode_order_for(inst["mcc"], inst["mnc"]),
+        "cp_mode_order": (
+            inst.get("cp_mode_order")
+            or cp_mode_order_for(inst["mcc"], inst["mnc"], inst.get("carrier_profile"))),
     }
 
 
