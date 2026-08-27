@@ -636,6 +636,80 @@ class CellularSmsTests(unittest.TestCase):
                 self.assertEqual(len(after_daemon_restart), 1)
                 self.assertEqual(after_daemon_restart[0]["body"], "BAL")
 
+    def test_send_and_discover_match_iccid_case_insensitively(self):
+        """PC/SC stores lowercase hex; ModemManager often returns the same ICCID in uppercase."""
+        modem = "/org/freedesktop/ModemManager1/Modem/0"
+        sim = "/org/freedesktop/ModemManager1/SIM/0"
+        sms = "/org/freedesktop/ModemManager1/SMS/7"
+        stored = "89000000000000abcd"
+        from_mm = "89000000000000ABCD"
+
+        def runner(args, **_kwargs):
+            if args == ["mmcli", "-L"]:
+                return Result(modem)
+            if args == ["mmcli", "-m", modem, "--output-json"]:
+                return Result(json.dumps({"modem": {"generic": {"sim": sim}}}))
+            if args == ["mmcli", "-i", sim, "--output-json"]:
+                return Result(json.dumps({"sim": {"properties": {"iccid": from_mm}}}))
+            if args == ["mmcli", "-m", modem, "--messaging-status", "--output-json"]:
+                return Result("{}")
+            if "--messaging-create-sms=number=6700" in args:
+                return Result(json.dumps({"modem": {"messaging": {"created-sms": sms}}}))
+            if args == ["mmcli", "-s", sms, "--send", "--output-json"]:
+                return Result("{}")
+            if args == ["mmcli", "-m", modem, "--messaging-list-sms", "--output-json"]:
+                return Result(json.dumps({"modem.messaging.sms": [sms]}))
+            if args == ["mmcli", "-s", sms, "--output-json"]:
+                return Result(json.dumps({"sms": {
+                    "content": {"number": "+44123", "text": "hello"},
+                    "properties": {"pdu-type": "deliver",
+                                   "timestamp": "2026-08-03T00:00:00+08:00"},
+                }}))
+            return Result(returncode=1)
+
+        instances = [{"id": "3", "iccid": stored}]
+        sent = self.send(instances, "3", "6700", "DATA", runner=runner)
+        self.assertTrue(sent["ok"], sent)
+        rows = cellular_sms.Scanner(runner).discover(instances)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["instance"], "3")
+
+    def test_send_falls_back_to_dbus_when_mmcli_lacks_create_with_text(self):
+        """Ubuntu 22.04 / MM 1.20 has no --messaging-create-sms-with-text."""
+        modem = "/org/freedesktop/ModemManager1/Modem/2"
+        sim = "/org/freedesktop/ModemManager1/SIM/2"
+        sms = "/org/freedesktop/ModemManager1/SMS/41"
+        calls = []
+
+        def runner(args, **_kwargs):
+            calls.append(tuple(args))
+            if args[:1] == ["busctl"] and "Create" in args:
+                return Result(f'o "{sms}"\n')
+            if args == ["mmcli", "-L"]:
+                return Result(modem)
+            if args == ["mmcli", "-m", modem, "--output-json"]:
+                return Result(json.dumps({"modem": {"generic": {"sim": sim}}}))
+            if args == ["mmcli", "-i", sim, "--output-json"]:
+                return Result(json.dumps({"sim": {"properties": {"iccid": "card-b"}}}))
+            if args == ["mmcli", "-m", modem, "--messaging-status", "--output-json"]:
+                return Result("{}")
+            if any(item.startswith("--messaging-create-sms-with-text=") for item in args):
+                return Result(stderr="error: no actions specified\n", returncode=1)
+            if args == ["mmcli", "-s", sms, "--send", "--output-json"]:
+                return Result("{}")
+            return Result(returncode=1)
+
+        result = self.send(
+            [{"id": "3", "iccid": "card-b"}], "3", "6700", "hello, it's 'quoted'",
+            runner=runner)
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["sms_path"], sms)
+        self.assertTrue(any(call[:1] == ("busctl",) and "Create" in call for call in calls))
+        self.assertTrue(any(
+            any(item.startswith("--messaging-create-sms-with-text=") for item in call)
+            for call in calls))
+
     def test_modemmanager_epoch_combines_boot_and_unique_dbus_owner(self):
         calls = []
 

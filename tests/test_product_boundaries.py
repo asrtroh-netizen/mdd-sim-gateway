@@ -55,6 +55,17 @@ class ProductBoundaryTests(unittest.TestCase):
                 self.assertNotIn("activation_reminder", settings[key]["events"])
                 self.assertTrue(settings[key]["events"]["software_update"])
 
+    def test_any_mcc_can_be_saved_on_a_line(self):
+        """The gateway is not locked to MCC 460/461; any readable SIM can be a line."""
+        temp, paths = self.temp_config()
+        with temp, paths:
+            for index, mcc in enumerate(("234", "310", "460", "461", "001"), start=1):
+                saved = config.upsert_instance({
+                    "id": str(index), "name": f"SIM {index}", "mcc": mcc, "mnc": "01",
+                    "iccid": f"890000000000000000{index}",
+                })
+                self.assertEqual(saved["mcc"], mcc)
+
     def test_only_first_five_legacy_lines_are_startable(self):
         temp, paths = self.temp_config()
         with temp, paths:

@@ -20,6 +20,8 @@ from copy import deepcopy
 
 import yaml
 
+from . import identity
+
 DATA_DIR = os.environ.get("MDD_DATA", os.path.join(os.getcwd(), "data"))
 CONFIG_PATH = os.path.join(DATA_DIR, "config.yaml")
 _lock = threading.RLock()
@@ -750,7 +752,7 @@ def delete_instance(iid: str):
 
 def _card_fingerprint(iccid: str) -> str:
     """Non-reversible identity used only to suppress immediate re-creation after deletion."""
-    return hashlib.sha256(str(iccid or "").strip().encode("utf-8")).hexdigest()
+    return hashlib.sha256(identity.normalize_iccid(iccid).encode("utf-8")).hexdigest()
 
 
 def suppress_card_until_removal(iccid: str) -> None:

@@ -2,6 +2,25 @@
 
 All notable changes follow Keep a Changelog and Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- Cellular SMS send no longer depends on `mmcli --messaging-create-sms-with-text`. On
+  ModemManager 1.20 (Ubuntu 22.04) that flag does not exist, so every 4G SMS failed with
+  `error: no actions specified`. Create now falls back to D-Bus `Messaging.Create`, which
+  is present on 1.20 and keeps the message body out of mmcli's comma-separated parser.
+
+- Line identity is a case-insensitive ICCID. PC/SC stores lowercase hex and ModemManager
+  often returns the same digits in uppercase, so 4G SMS send and receive missed every card
+  whose ICCID contained a letter. Matching, local-send tracking and SIM decode now treat
+  those spellings as the same card.
+
+- Turning VoWiFi off and then swapping the SIM no longer leaves a dead draft whose
+  toggles stay greyed out. The existing line is rebound to the new ICCID, a complete draft
+  is promoted without starting the engine, and the VoWiFi switch stays usable so the
+  operator can recover from the UI.
+
 ## [1.5.2] - 2026-08-26
 
 ### Fixed

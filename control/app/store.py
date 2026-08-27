@@ -13,7 +13,7 @@ import sqlite3
 import threading
 import time
 
-from . import sms_pdu
+from . import identity, sms_pdu
 
 DATA_DIR = os.environ.get("MDD_DATA", os.path.join(os.getcwd(), "data"))
 DB_PATH = os.path.join(DATA_DIR, "mdd-sim-gateway.sqlite")
@@ -876,8 +876,8 @@ def reserve_local_modem_sms(instance: str, iccid: str, content_hash: str,
             "INSERT INTO local_modem_sms"
             "(instance,iccid,daemon_epoch,message_id,content_hash,created_ts) "
             "VALUES(?,?,?,?,?,?)",
-            (str(instance), str(iccid), str(daemon_epoch), int(message.lastrowid),
-             str(content_hash), now),
+            (str(instance), identity.normalize_iccid(iccid), str(daemon_epoch),
+             int(message.lastrowid), str(content_hash), now),
         )
         return int(cur.lastrowid)
 
@@ -955,8 +955,8 @@ def is_local_modem_sms(daemon_epoch: str, iccid: str, modem_path: str, sms_path:
             "SELECT 1 FROM local_modem_sms "
             "WHERE daemon_epoch=? AND iccid=? AND modem_path=? AND sms_path=? "
             "AND content_hash=? LIMIT 1",
-            (str(daemon_epoch), str(iccid), str(modem_path), str(sms_path),
-             str(content_hash)),
+            (str(daemon_epoch), identity.normalize_iccid(iccid), str(modem_path),
+             str(sms_path), str(content_hash)),
         ).fetchone()
         if row:
             return True
@@ -971,7 +971,8 @@ def is_local_modem_sms(daemon_epoch: str, iccid: str, modem_path: str, sms_path:
             "SELECT id FROM local_modem_sms WHERE daemon_epoch=? AND iccid=? "
             "AND sms_path IS NULL AND cancelled=0 AND content_hash=? "
             "AND created_ts BETWEEN ? AND ? ORDER BY created_ts DESC,id DESC LIMIT 1",
-            (str(daemon_epoch), str(iccid), str(content_hash), lower, upper),
+            (str(daemon_epoch), identity.normalize_iccid(iccid), str(content_hash),
+             lower, upper),
         ).fetchone()
         if not pending:
             return False
@@ -980,7 +981,8 @@ def is_local_modem_sms(daemon_epoch: str, iccid: str, modem_path: str, sms_path:
         c.execute(
             "DELETE FROM local_modem_sms WHERE daemon_epoch=? AND iccid=? AND sms_path=? "
             "AND id<>?",
-            (str(daemon_epoch), str(iccid), str(sms_path), int(pending["id"])),
+            (str(daemon_epoch), identity.normalize_iccid(iccid), str(sms_path),
+             int(pending["id"])),
         )
         claimed = c.execute(
             "UPDATE local_modem_sms SET modem_path=?,sms_path=?,bound_ts=? "
@@ -1011,7 +1013,8 @@ def prune_local_modem_sms(daemon_epoch: str, iccid: str, modem_path: str,
             "SELECT id,sms_path FROM local_modem_sms WHERE daemon_epoch=? AND iccid=? "
             "AND modem_path=? AND sms_path IS NOT NULL "
             "AND COALESCE(bound_ts,created_ts)<?",
-            (str(daemon_epoch), str(iccid), str(modem_path), cutoff),
+            (str(daemon_epoch), identity.normalize_iccid(iccid), str(modem_path),
+             cutoff),
         ).fetchall()
         stale_ids = [(int(row["id"]),) for row in rows if str(row["sms_path"]) not in live]
         if stale_ids:

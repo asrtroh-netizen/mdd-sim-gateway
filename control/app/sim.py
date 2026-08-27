@@ -100,12 +100,12 @@ def swap_nibbles(s: str) -> str:
 def dec_imsi(ef_hex: str) -> Optional[str]:
     if len(ef_hex) < 4:
         return None
-    swapped = swap_nibbles(ef_hex[2:]).rstrip("f")
+    swapped = swap_nibbles(ef_hex[2:]).casefold().rstrip("f")
     return swapped[1:] if swapped else None
 
 
 def dec_iccid(ef_hex: str) -> str:
-    return swap_nibbles(ef_hex).rstrip("f")
+    return swap_nibbles(ef_hex).casefold().rstrip("f")
 
 
 # 3GPP USIM application AID prefix (RID A000000087 + app code 1002). EF_DIR record 1 is

@@ -31,7 +31,8 @@ from fastapi.staticfiles import StaticFiles
 from . import config as cfg
 from . import (store, engine, status as status_mod, sim, card, notify_push, lpa, auth,
                estkme, usbreader, egress, device_state, operations, update_check, cellular_sms,
-               sysinfo, failover, carrier_id, allowance, cellular_call, sms_pdu, ussd)
+               sysinfo, failover, carrier_id, allowance, cellular_call, sms_pdu, ussd,
+               identity)
 from .version import VERSION
 from .ami import AmiClient
 from .runtime import RuntimeRegistry
@@ -221,12 +222,12 @@ def _live_modem_binding_for_instance(inst: dict) -> dict:
     for path in sorted(glob.glob(os.path.join(cfg.DATA_DIR, "modems", "*.json"))):
         try:
             with open(path, encoding="utf-8") as handle:
-                identity = json.load(handle)
+                modem_identity = json.load(handle)
         except (OSError, ValueError, TypeError):
             continue
-        if str(identity.get("iccid") or "").strip() != wanted:
+        if not identity.iccids_equal(modem_identity.get("iccid"), wanted):
             continue
-        hardware_id = str(identity.get("hardware_id") or "").strip()
+        hardware_id = str(modem_identity.get("hardware_id") or "").strip()
         if not hardware_id:
             continue
         binding = _modem_reader_binding(f"VoWiFi Modem {hardware_id} 00 00")
@@ -365,19 +366,95 @@ def _next_instance_id() -> str:
     return str(candidate)
 
 
+def _line_bound_to_card(info: dict) -> dict | None:
+    """Return the line already attached to this reader or modem, if exactly one matches.
+
+    Used after a physical swap or eSIM profile change so the same logical line can be
+    rebound to the new ICCID instead of minting a second, unpromotable draft.
+    """
+    name = str(info.get("name") or "")
+    hardware_id = (str(info.get("hardware_id") or "")
+                   or device_state.vpcd_modem_hardware_id(name))
+    port = str(info.get("reader_port") or "")
+    previous = (hub.cards.get(name) or {}).get("matched")
+    if previous:
+        inst = cfg.get_instance(previous)
+        if inst:
+            return inst
+
+    candidates = []
+    for inst in cfg.list_instances():
+        if hardware_id and (
+                str(inst.get("imei_source_device_id") or "") == hardware_id
+                or any(device_state.vpcd_modem_hardware_id(inst.get(key)) == hardware_id
+                       for key in ("pin_reader", "swu_reader", "ami_reader"))):
+            candidates.append(inst)
+            continue
+        if port and str(inst.get("reader_port") or "") == port:
+            candidates.append(inst)
+            continue
+        if name and name in {str(inst.get(key) or "")
+                             for key in ("pin_reader", "swu_reader", "ami_reader")}:
+            candidates.append(inst)
+    if len(candidates) == 1:
+        return candidates[0]
+    live = {identity.normalize_iccid(card.get("iccid"))
+            for card in hub.cards.values()
+            if card.get("present") and identity.normalize_iccid(card.get("iccid"))}
+    live.discard(identity.normalize_iccid(info.get("iccid")))
+    orphaned = [inst for inst in candidates
+                if identity.normalize_iccid(inst.get("iccid")) not in live]
+    return orphaned[0] if len(orphaned) == 1 else None
+
+
+def _rebind_line_to_new_iccid(info: dict) -> dict | None:
+    """Point the device's existing line at a newly observed ICCID.
+
+    A card cannot be owned by two lines. If the new ICCID already has a line, that
+    line wins. If this reader/modem already has a line whose ICCID is gone, that
+    line is updated in place so a VoWiFi-off swap cannot leave a dead draft.
+    """
+    iccid = identity.normalize_iccid(info.get("iccid"))
+    if not iccid:
+        return None
+    existing = _match_instance_by_iccid(iccid)
+    if existing:
+        return existing
+    if cfg.card_auto_create_suppressed(iccid):
+        return None
+    bound = _line_bound_to_card(info)
+    if not bound or identity.iccids_equal(bound.get("iccid"), iccid):
+        return None
+    update = {
+        "id": str(bound["id"]),
+        "iccid": iccid,
+        "imsi": str(info.get("imsi") or bound.get("imsi") or ""),
+        "mcc": str(info.get("mcc") or bound.get("mcc") or ""),
+        "mnc": str(info.get("mnc") or bound.get("mnc") or ""),
+        "smsc": str(info.get("smsc") or bound.get("smsc") or ""),
+        **_carrier_identity_update(info),
+    }
+    rebound = cfg.upsert_instance(update)
+    log.info("rebound line %s to new ICCID after card or profile change", bound["id"])
+    return rebound
+
+
 def _ensure_card_draft(info: dict) -> dict | None:
     """Persist a safe, stopped line draft as soon as a new SIM identity is readable.
 
     A draft makes hotplug the normal creation path while deliberately avoiding engine startup
     until mandatory identity fields (notably IMEI on a native reader) are available.
     """
-    iccid = str(info.get("iccid") or "").strip()
+    iccid = identity.normalize_iccid(info.get("iccid"))
     if not iccid:
         return None
     existing = _match_instance_by_iccid(iccid)
     if existing:
         return existing
-    identity = _modem_identity_for_reader(info.get("name")) or {}
+    rebound = _rebind_line_to_new_iccid(info)
+    if rebound:
+        return rebound
+    modem_identity = _modem_identity_for_reader(info.get("name")) or {}
     mcc, mnc = str(info.get("mcc") or ""), str(info.get("mnc") or "")
     try:
         inst = cfg.upsert_instance({
@@ -389,7 +466,7 @@ def _ensure_card_draft(info: dict) -> dict | None:
             "mcc": mcc,
             "mnc": mnc,
             **_carrier_identity_update(info),
-            "imei": identity.get("imei") or "",
+            "imei": modem_identity.get("imei") or "",
             "reader": f"imsi:{info['imsi']}" if info.get("imsi") else "",
             "reader_index": int(info.get("index") or 0),
             "reader_port": str(info.get("reader_port") or ""),
@@ -618,10 +695,10 @@ def _start_engine_checked(inst: dict, settings: dict, dev_mounts: bool = False,
 
 
 def _match_instance_by_iccid(iccid):
-    if not iccid:
+    if not identity.normalize_iccid(iccid):
         return None
     for i in cfg.list_instances():
-        if i.get("iccid") == iccid:
+        if identity.iccids_equal(i.get("iccid"), iccid):
             return i
     return None
 
@@ -807,28 +884,28 @@ async def _auto_start_hotplugged_line(iid: str) -> None:
             return
         cards = hub.cards_list()
         card_info = next((item for item in cards if item.get("present")
-                          and str(item.get("iccid") or "") == str(inst.get("iccid") or "")), None)
+                          and identity.iccids_equal(item.get("iccid"), inst.get("iccid"))), None)
         if not card_info:
             return
         device_id, device_type = _device_for_card(card_info, cards)
         desired = device_state.desired()
         wanted = ((desired.get("devices") or {}).get(device_id)
                   or desired.get("defaults") or {})
-        if not wanted.get("vowifi_enabled", True):
-            return
+        vowifi_wanted = bool(wanted.get("vowifi_enabled", True))
 
-        # A newly-seen SIM is intentionally persisted as a stopped draft while the card
-        # monitor is still learning its identity. Once the settled hotplug snapshot has all
-        # mandatory values, promote that same line automatically. This makes inserting a
-        # modem/SIM a complete operation instead of leaving the user to discover and submit
-        # the manual provisioning form. Only drafts are promoted here: a ready line that the
-        # user explicitly disabled remains disabled.
+        # Promote drafts even when VoWiFi is off. Promotion only completes the line
+        # record; it does not start the engine. Doing this after the VoWiFi early
+        # return left a complete draft unpromoted and greyed the toggle out so the
+        # operator could not turn VoWiFi back on (upstream #19).
         if inst.get("provisioning_state") == "draft":
-            inst = await asyncio.to_thread(_auto_promote_card_draft, inst, card_info, cards)
+            inst = await asyncio.to_thread(
+                _auto_promote_card_draft, inst, card_info, cards, enable=vowifi_wanted)
             if inst.get("provisioning_state") == "draft":
                 log.info("hotplug draft %s awaiting: %s", iid,
                          ", ".join(inst.get("auto_provision_missing") or []))
                 return
+        if not vowifi_wanted:
+            return
         if not inst.get("enabled", True):
             return
         await asyncio.to_thread(_start_engine_checked, inst, cfg.get_settings(),
@@ -856,7 +933,7 @@ def _line_auto_start_allowed(inst: dict) -> tuple[bool, str]:
     iccid = str(inst.get("iccid") or "")
     cards = hub.cards_list()
     card_info = next((item for item in cards if item.get("present") and (
-        (iccid and str(item.get("iccid") or "") == iccid)
+        (iccid and identity.iccids_equal(item.get("iccid"), iccid))
         or str(item.get("matched") or "") == iid)), None)
     if card_info is None:
         return False, "no_card"
@@ -869,7 +946,8 @@ def _line_auto_start_allowed(inst: dict) -> tuple[bool, str]:
     return True, ""
 
 
-def _auto_promote_card_draft(inst: dict, card_info: dict, cards: list[dict]) -> dict:
+def _auto_promote_card_draft(inst: dict, card_info: dict, cards: list[dict],
+                             *, enable: bool = True) -> dict:
     """Promote a complete auto-created draft, or return it with missing-field hints.
 
     Hardware identity follows the physical reader/modem; SIM identity follows the ICCID.
@@ -910,12 +988,13 @@ def _auto_promote_card_draft(inst: dict, card_info: dict, cards: list[dict]) -> 
         "name": (inst.get("name")
                  or cfg.default_instance_name(mcc, mnc, resolved_iccid)),
         "provisioning_state": "ready",
-        "enabled": True,
+        "enabled": bool(enable),
         "imsi": imsi,
         "mcc": mcc,
         "mnc": mnc,
         **_carrier_identity_update(card_info),
-        "iccid": str(card_info.get("iccid") or inst.get("iccid") or ""),
+        "iccid": identity.normalize_iccid(
+            card_info.get("iccid") or inst.get("iccid") or ""),
         "smsc": smsc,
         "imei": imei,
         "imei_source_device_id": hardware_id,
@@ -1684,8 +1763,9 @@ def _distinct_cards_present() -> int:
     plural reading rather than asserting a single-SIM host that may not be one.
     """
     try:
-        return len({str(entry.get("iccid") or "")
-                    for entry in hub.cards.values() if entry.get("iccid")}) or 2
+        return len({identity.normalize_iccid(entry.get("iccid"))
+                    for entry in hub.cards.values()
+                    if identity.normalize_iccid(entry.get("iccid"))}) or 2
     except Exception:  # noqa - the card cache is a hint here, never the decision itself
         return 2
 
@@ -1719,7 +1799,8 @@ def _local_card_fault(iid: str, inst: dict) -> str:
     # would not — which is exactly the case the check was added for.
     card_iccid = str(pin.get("iccid") or "").strip()
     line_iccid = str(inst.get("iccid") or "").strip()
-    card_confirmed = bool(card_iccid and line_iccid and card_iccid == line_iccid)
+    card_confirmed = bool(card_iccid and line_iccid
+                          and identity.iccids_equal(card_iccid, line_iccid))
     # Only full PC/SC names are comparable: legacy numeric indexes and imsi:/iccid: specs name
     # a search, not a slot.
     bound = str(inst.get("pin_reader") or "").strip()
@@ -2485,7 +2566,7 @@ def _resolve_reader_index(body: dict) -> int:
         for card_info in hub.cards.values():
             if not card_info.get("present"):
                 continue
-            if ((iccid and str(card_info.get("iccid") or "") == iccid)
+            if ((iccid and identity.iccids_equal(card_info.get("iccid"), iccid))
                     or (imsi and str(card_info.get("imsi") or "") == imsi)):
                 idx = card_info.get("index")
                 if idx is not None and 0 <= int(idx) < len(rlist):
@@ -2804,7 +2885,7 @@ async def _esim_refresh_modem_readers(
                 idx = readers.index(sibling)
                 card_data = await asyncio.to_thread(sim.read_card, idx)
                 actual = str(card_data.iccid or "")
-                if actual != str(iccid):
+                if not identity.iccids_equal(actual, iccid):
                     raise RuntimeError(
                         f"{sibling} reports ICCID {actual or 'unknown'}, expected {iccid}")
                 info = await _esim_refresh_card(
@@ -2976,7 +3057,7 @@ def _card_identity_mismatch(inst: dict) -> dict | None:
     modem_identity = _modem_identity_for_reader(
         inst.get("swu_reader") or inst.get("pin_reader") or inst.get("ami_reader"))
     modem_iccid = str((modem_identity or {}).get("iccid") or "").strip()
-    if modem_iccid and modem_iccid != want:
+    if modem_iccid and not identity.iccids_equal(modem_iccid, want):
         return {
             "reader": (inst.get("swu_reader") or inst.get("pin_reader")
                        or inst.get("ami_reader")),
@@ -2992,7 +3073,7 @@ def _card_identity_mismatch(inst: dict) -> dict | None:
             if c.get("name") != swu_name or not c.get("present"):
                 continue
             got = str(c.get("iccid") or "").strip()
-            if got and got != want:
+            if got and not identity.iccids_equal(got, want):
                 return {"reader": swu_name, "iccid": got}
     if _reader_index_for_instance(inst) is not None:
         return None      # this line's SIM/profile is present somewhere — all good
@@ -3009,7 +3090,7 @@ def _card_identity_mismatch(inst: dict) -> dict | None:
         else:
             continue
         got = (c.get("iccid") or "").strip()
-        if got and got != want:
+        if got and not identity.iccids_equal(got, want):
             return {"reader": c.get("name") or (f"USB {port}" if port else f"reader {idx}"),
                     "iccid": got}
     return None
@@ -3453,9 +3534,14 @@ async def _unified_devices() -> list[dict]:
             vowifi.update(actual="off", available=False, reason="Device not connected")
         elif not inst:
             vowifi.update(available=False, reason="Insert a readable SIM before enabling VoWiFi")
-        elif is_draft:
+        elif is_draft and inst.get("auto_provision_missing"):
+            # Only a draft that is actually missing fields greys the toggle out. A
+            # complete draft left behind because VoWiFi was off must stay clickable
+            # so the operator can recover after a card swap (upstream #19).
             vowifi.update(available=False,
                           reason="Automatic setup is waiting for SIM or hardware information")
+        elif is_draft:
+            vowifi.setdefault("available", True)
 
         actual_state = observed.get("actual") or {}
         # Published by the orchestrator when this gateway is configured VoWiFi-only
@@ -3822,6 +3908,18 @@ async def api_device_capabilities(device_id: str, body: dict):
         target_observed = (observed_doc.get("devices") or {}).get(device_id) or {}
         target_instance = _instance_for_device(
             device_id, identities.get(device_id) or {}, cards, target_observed)
+        if (target_instance and target_instance.get("provisioning_state") == "draft"
+                and body.get("vowifi_enabled") is True):
+            card_info = next((item for item in cards
+                              if item.get("present")
+                              and (identity.iccids_equal(item.get("iccid"),
+                                                         target_instance.get("iccid"))
+                                   or str(item.get("matched") or "")
+                                   == str(target_instance["id"]))), None)
+            if card_info:
+                target_instance = await asyncio.to_thread(
+                    _auto_promote_card_draft, target_instance, card_info, cards,
+                    enable=True)
         target_iid = str(target_instance["id"]) if target_instance else ""
         # Repeating an ON request is an explicit retry when the device-level intent says ON
         # but the line is disabled or its engine has stopped. Do not discard it as a no-op.
@@ -4384,14 +4482,15 @@ async def api_instance_delete(iid: str, delete_history: bool = True, confirm_id:
         raise HTTPException(404, "no such instance")
     inserted = any(card_info.get("present") and (
         str(card_info.get("matched") or "") == str(iid)
-        or (inst.get("iccid") and str(card_info.get("iccid") or "") == str(inst["iccid"])))
+        or (inst.get("iccid")
+            and identity.iccids_equal(card_info.get("iccid"), inst.get("iccid"))))
         for card_info in hub.cards_list())
     # Old migrations could leave two records for the same ICCID. Deleting one must not pause
     # or strand the surviving line that should take ownership of the still-inserted SIM.
     replacements = [item for item in cfg.list_instances()
                     if str(item.get("id")) != str(iid)
                     and inst.get("iccid")
-                    and str(item.get("iccid") or "") == str(inst.get("iccid"))]
+                    and identity.iccids_equal(item.get("iccid"), inst.get("iccid"))]
     if inserted and inst.get("iccid") and not replacements:
         await asyncio.to_thread(cfg.suppress_card_until_removal, inst["iccid"])
     await asyncio.to_thread(engine.stop, iid)
