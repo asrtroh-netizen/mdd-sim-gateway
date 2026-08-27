@@ -6,6 +6,16 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ### Added
 
+- amd64 is a first-class Release path. CI builds a native amd64 Engine image; the
+  updater and `install.sh` download or build the host architecture and refuse to
+  install an ARM64 Engine on amd64 (upstream #13). GHCR `:vX.Y.Z` stays ARM64;
+  amd64 uses `:vX.Y.Z-amd64` and the matching Release tarball. Local rebuild:
+  `docker build --platform linux/amd64 -t mdd-sim-gateway/engine engine`.
+
+- `install.sh doctor` / `python -m control.app.doctor` checks Docker, ModemManager
+  or mmcli, pcscd, TUN/XFRM, Engine image architecture and the data directory.
+  Output never includes tokens, passwords or subscriber identifiers.
+
 - Modem engineering panel on the existing 4G / hardware pages: AT terminal with redacted
   history, module-side USSD (`AT+CUSD` / ModemManager 3GPP USSD), live RSRP/RSRQ/SINR,
   access technology, band and channel, network scan plus automatic/manual operator select,
@@ -28,6 +38,17 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
   IMSI-derived FQDN when nothing matches. Optional IPCC import maps only those
   fields from a user-supplied bundle. Each line records whether the last SMS
   used IMS or cellular and shows a visible error when a path fails.
+
+### Changed
+
+- After a successful update, unused prior Engine tags are removed. Cleanup fails
+  closed if it would delete the running tag or cannot read live containers
+  (upstream #15).
+
+- Control-plane HTTP routes for devices, lines, SMS, eSIM, carrier profiles and
+  modem engineering now live under `control/app/routers/`. `control.app.main`
+  still re-exports the same handler names so existing tests and patches keep
+  working.
 
 ### Fixed
 
