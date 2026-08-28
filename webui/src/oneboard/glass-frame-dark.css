@@ -1,0 +1,468 @@
+/**
+ * 黑暗模式 · 全局玻璃框体（实验室定稿）
+ * 覆盖 panel-card / factory-card / status-hero 等标准容器
+ * 排除：国旗语义卡 subscription-card / rule-card / country-node 等
+ */
+
+[data-theme='dark'] {
+  --gf-radius: 14px;
+  --gf-card-shadow: 0 10px 36px rgba(0, 0, 0, 0.42);
+  --gf-edge-top: rgba(255, 255, 255, 0.14);
+  --gf-edge-side: rgba(255, 255, 255, 0.08);
+  --gf-edge-bottom: rgba(255, 255, 255, 0.04);
+  --glass-blur: blur(40px) saturate(132%) brightness(0.94);
+  --glass-blur-soft: blur(24px) saturate(128%) brightness(0.96);
+  --frame-base-top: rgba(38, 46, 62, 0.58);
+  --frame-base-bottom: rgba(24, 30, 44, 0.62);
+  --frame-veil-top: rgba(255, 255, 255, 0.035);
+  --frame-veil-bottom: rgba(0, 0, 0, 0.03);
+  --lens-wash: rgba(255, 255, 255, 0.022);
+  --corner-glow-x: 68%;
+  --corner-glow-y: 56%;
+  --corner-glow-a: rgba(125, 95, 255, 0.09);
+  --corner-glow-b: rgba(125, 95, 255, 0.028);
+  --corner-glow-c: rgba(125, 95, 255, 0.008);
+  --corner-glow-fade: 90%;
+}
+
+[data-theme='dark'] :is(
+  .glass-frame,
+  .card,
+  .panel-card,
+  .section-card,
+  .glass-neutral,
+  .panel-neutral,
+  .panel-card.glass-neutral,
+  .hostname-banner,
+  .stream-hero.panel-card,
+  .stream-hero.panel-neutral,
+  .glass-blue,
+  .panel-blue,
+  .panel-card.glass-blue,
+  .glass-purple,
+  .panel-purple,
+  .panel-card.glass-purple,
+  .glass-green,
+  .panel-green,
+  .panel-card.glass-green,
+  .glass-stat,
+  .factory-card,
+  .stat-mini,
+  .traffic-chart-item,
+  .global-stat,
+  .theme-toggle,
+  .glass-inner,
+  .status-hero,
+  .glass-log-console,
+  .control-card,
+  .block-container,
+  .sub-resource-card,
+  .sub-add-card,
+  .rank-card,
+  .empty-card,
+  .dns-stat,
+  .yaml-import,
+  .pg-filter,
+  .sub-editor,
+  .rule-modal
+):not(
+  .subscription-card,
+  .region-card,
+  .country-node-card,
+  .dashboard-country-card,
+  .rule-card,
+  .semantic-visual-card,
+  .rule-group-card,
+  .semantic-bucket-card
+) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: var(--gf-radius, 14px) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  background:
+    radial-gradient(circle at 86% 50%, var(--lens-wash) 0%, transparent 52%),
+    radial-gradient(
+      ellipse var(--corner-glow-x) var(--corner-glow-y) at 0% 0%,
+      var(--corner-glow-a) 0%,
+      var(--corner-glow-b) 22%,
+      var(--corner-glow-c) 44%,
+      transparent var(--corner-glow-fade)
+    ),
+    linear-gradient(
+      168deg,
+      var(--frame-veil-top) 0%,
+      transparent 36%,
+      var(--frame-veil-bottom) 100%
+    ),
+    linear-gradient(168deg, var(--frame-base-top) 0%, var(--frame-base-bottom) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 var(--gf-edge-top),
+    inset 1px 0 0 var(--gf-edge-side),
+    inset 0 -1px 0 var(--gf-edge-bottom),
+    var(--gf-card-shadow) !important;
+  transition:
+    border-color 0.28s ease,
+    box-shadow 0.28s ease,
+    background 0.28s ease,
+    transform 0.28s ease;
+}
+
+[data-theme='dark'] :is(
+  .glass-frame,
+  .card,
+  .panel-card,
+  .section-card,
+  .glass-stat,
+  .factory-card,
+  .stat-mini,
+  .traffic-chart-item,
+  .global-stat,
+  .status-hero,
+  .glass-log-console,
+  .control-card,
+  .block-container,
+  .sub-resource-card,
+  .sub-add-card,
+  .rank-card,
+  .empty-card,
+  .dns-stat
+):not(
+  .subscription-card,
+  .region-card,
+  .country-node-card,
+  .dashboard-country-card,
+  .rule-card,
+  .semantic-visual-card,
+  .rule-group-card,
+  .semantic-bucket-card
+)::after {
+  content: '' !important;
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    168deg,
+    rgba(255, 255, 255, 0.028) 0%,
+    rgba(255, 255, 255, 0.008) 42%,
+    rgba(0, 0, 0, 0.022) 100%
+  ) !important;
+  background-image: linear-gradient(
+    168deg,
+    rgba(255, 255, 255, 0.028) 0%,
+    rgba(255, 255, 255, 0.008) 42%,
+    rgba(0, 0, 0, 0.022) 100%
+  ) !important;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 1;
+}
+
+[data-theme='dark'] :is(
+  .glass-frame,
+  .card,
+  .panel-card,
+  .section-card,
+  .glass-stat,
+  .factory-card,
+  .stat-mini,
+  .traffic-chart-item,
+  .global-stat,
+  .status-hero,
+  .glass-log-console,
+  .control-card,
+  .block-container,
+  .sub-resource-card,
+  .sub-add-card,
+  .rank-card,
+  .empty-card,
+  .dns-stat
+):not(
+  .subscription-card,
+  .region-card,
+  .country-node-card,
+  .dashboard-country-card,
+  .rule-card,
+  .semantic-visual-card,
+  .rule-group-card,
+  .semantic-bucket-card
+)::before {
+  content: '' !important;
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.05) 24%,
+    rgba(255, 255, 255, 0.02) 52%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+[data-theme='dark'] :is(
+  .glass-frame,
+  .card,
+  .panel-card,
+  .section-card,
+  .glass-stat,
+  .factory-card,
+  .stat-mini,
+  .traffic-chart-item,
+  .global-stat,
+  .status-hero,
+  .glass-log-console,
+  .control-card,
+  .block-container,
+  .sub-resource-card,
+  .sub-add-card,
+  .rank-card,
+  .empty-card,
+  .dns-stat
+):not(
+  .subscription-card,
+  .region-card,
+  .country-node-card,
+  .dashboard-country-card,
+  .rule-card,
+  .semantic-visual-card,
+  .rule-group-card,
+  .semantic-bucket-card
+) > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 色相面板 · 仅调整左上角辉光 */
+[data-theme='dark'] :is(.panel-blue, .panel-card.panel-blue, .glass-blue) {
+  --corner-glow-a: rgba(59, 130, 246, 0.11);
+  --corner-glow-b: rgba(59, 130, 246, 0.034);
+  --corner-glow-c: rgba(59, 130, 246, 0.01);
+}
+
+[data-theme='dark'] :is(.panel-purple, .panel-card.panel-purple, .glass-purple) {
+  --corner-glow-a: rgba(167, 139, 250, 0.12);
+  --corner-glow-b: rgba(167, 139, 250, 0.036);
+  --corner-glow-c: rgba(167, 139, 250, 0.01);
+}
+
+[data-theme='dark'] :is(.panel-green, .panel-card.panel-green, .glass-green) {
+  --corner-glow-a: rgba(52, 211, 153, 0.11);
+  --corner-glow-b: rgba(52, 211, 153, 0.034);
+  --corner-glow-c: rgba(52, 211, 153, 0.01);
+}
+
+/* 可选中 · 绿色激活（VoHive 设备 / eSIM） */
+[data-theme='dark'] .glass-frame.glass-frame--selectable {
+  cursor: pointer;
+}
+
+[data-theme='dark'] .glass-frame.glass-frame--selectable.is-glow-green {
+  --frame-base-top: rgba(16, 28, 24, 0.41);
+  --frame-base-bottom: rgba(9, 17, 15, 0.44);
+  --frame-veil-top: rgba(200, 255, 230, 0.016);
+  --frame-veil-bottom: rgba(0, 0, 0, 0.055);
+  --lens-wash: rgba(52, 211, 153, 0.011);
+  --corner-glow-a: rgba(52, 211, 153, 0.1);
+  --corner-glow-b: rgba(52, 211, 153, 0.032);
+  --corner-glow-c: rgba(52, 211, 153, 0.008);
+  border-color: rgba(52, 211, 153, 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(110, 231, 183, 0.14),
+    inset 1px 0 0 rgba(52, 211, 153, 0.18),
+    inset 0 -1px 0 var(--gf-edge-bottom),
+    0 0 0 1px rgba(52, 211, 153, 0.1),
+    0 0 48px rgba(52, 211, 153, 0.045),
+    var(--gf-card-shadow) !important;
+}
+
+[data-theme='dark'] .glass-frame.glass-frame--selectable.is-glow-green::before {
+  background: linear-gradient(
+    145deg,
+    rgba(110, 231, 183, 0.22) 0%,
+    rgba(52, 211, 153, 0.07) 24%,
+    rgba(255, 255, 255, 0.02) 52%,
+    rgba(52, 211, 153, 0.05) 100%
+  );
+}
+
+[data-theme='dark'] .glass-frame.glass-frame--selectable:hover {
+  transform: translateY(-1px);
+}
+
+/* 紧凑嵌套框 · 与 eSIM 卡同系（图四视觉） */
+[data-theme='dark'] .glass-frame.glass-frame--compact {
+  --gf-radius: 12px;
+  border-radius: var(--gf-radius) !important;
+  backdrop-filter: var(--glass-blur-soft) !important;
+  -webkit-backdrop-filter: var(--glass-blur-soft) !important;
+  box-shadow:
+    inset 0 1px 0 var(--gf-edge-top),
+    inset 1px 0 0 var(--gf-edge-side),
+    inset 0 -1px 0 var(--gf-edge-bottom),
+    0 6px 22px rgba(0, 0, 0, 0.34) !important;
+}
+
+[data-theme='dark'] .glass-frame.glass-frame--pill {
+  border-radius: 999px !important;
+}
+
+[data-theme='dark'] .glass-frame.glass-frame--tone-green {
+  --frame-base-top: rgba(16, 28, 24, 0.41);
+  --frame-base-bottom: rgba(9, 17, 15, 0.44);
+  --frame-veil-top: rgba(200, 255, 230, 0.016);
+  --frame-veil-bottom: rgba(0, 0, 0, 0.055);
+  --lens-wash: rgba(52, 211, 153, 0.011);
+  --corner-glow-a: rgba(52, 211, 153, 0.1);
+  --corner-glow-b: rgba(52, 211, 153, 0.032);
+  --corner-glow-c: rgba(52, 211, 153, 0.008);
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(110, 231, 183, 0.14),
+    inset 1px 0 0 rgba(52, 211, 153, 0.18),
+    inset 0 -1px 0 var(--gf-edge-bottom),
+    0 0 0 1px rgba(52, 211, 153, 0.1),
+    0 0 32px rgba(52, 211, 153, 0.045),
+    0 6px 22px rgba(0, 0, 0, 0.34) !important;
+}
+
+[data-theme='dark'] .glass-frame.glass-frame--tone-green::before {
+  background: linear-gradient(
+    145deg,
+    rgba(110, 231, 183, 0.22) 0%,
+    rgba(52, 211, 153, 0.07) 24%,
+    rgba(255, 255, 255, 0.02) 52%,
+    rgba(52, 211, 153, 0.05) 100%
+  );
+}
+
+[data-theme='dark'] .status-hero__metric.glass-frame.glass-frame--tone-green.is-pulse {
+  --corner-glow-a: rgba(52, 211, 153, 0.16);
+  --corner-glow-b: rgba(52, 211, 153, 0.045);
+  border-color: rgba(52, 211, 153, 0.32) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(110, 231, 183, 0.16),
+    inset 1px 0 0 rgba(52, 211, 153, 0.2),
+    inset 0 -1px 0 var(--gf-edge-bottom),
+    0 0 40px rgba(52, 211, 153, 0.14),
+    0 6px 22px rgba(0, 0, 0, 0.34) !important;
+}
+
+[data-theme='dark'] .status-hero__metric.glass-frame.is-pulse:not(.glass-frame--tone-green) {
+  --corner-glow-a: rgba(59, 130, 246, 0.12);
+  --corner-glow-b: rgba(59, 130, 246, 0.034);
+  border-color: rgba(96, 165, 250, 0.22) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(147, 197, 253, 0.12),
+    inset 1px 0 0 rgba(96, 165, 250, 0.14),
+    inset 0 -1px 0 var(--gf-edge-bottom),
+    0 0 28px rgba(96, 165, 250, 0.12),
+    0 6px 22px rgba(0, 0, 0, 0.34) !important;
+}
+
+/* 取消旧 flat 卡 hover 抬升 */
+[data-theme='dark'] :is(
+  .card,
+  .panel-card,
+  .section-card,
+  .glass-stat,
+  .factory-card,
+  .stat-mini,
+  .hostname-banner,
+  .global-stat
+):not(
+  .subscription-card,
+  .region-card,
+  .country-node-card,
+  .dashboard-country-card,
+  .rule-card,
+  .semantic-visual-card,
+  .glass-frame--selectable
+):hover {
+  transform: none !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* VoHive / Dashboard 外层壳保持透明 — 背景直接落在 body 画布上 */
+[data-theme='dark'] .app-shell,
+[data-theme='dark'] .layout,
+[data-theme='dark'] #app,
+[data-theme='dark'] .content,
+[data-theme='dark'] .content-inner {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-theme='dark'] .app-shell {
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  isolation: auto !important;
+}
+
+[data-theme='dark'] .app-shell::before,
+[data-theme='dark'] .app-shell::after {
+  content: none !important;
+  display: none !important;
+}
+
+[data-theme='dark'] .vohive-console {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-theme='dark'] .dashboard-shell {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── 实验室定稿 · 全页画布（与 onebord-ui-lab 完全一致） ── */
+html[data-theme='dark'] {
+  --bg-base: #070812;
+  min-height: 100%;
+  background-color: #070812 !important;
+  background-image:
+    radial-gradient(circle at 72% 16%, rgba(139, 92, 246, 0.07), transparent 42%),
+    radial-gradient(circle at 18% 12%, rgba(120, 100, 220, 0.045), transparent 52%),
+    linear-gradient(180deg, #0a0818 0%, #050610 100%) !important;
+  background-attachment: fixed !important;
+  background-repeat: no-repeat !important;
+}
+
+html[data-theme='dark'] body {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+/* 去掉旧 ambient 噪点 / 蓝光，避免盖住实验室渐变 */
+html[data-theme='dark'] body::before,
+html[data-theme='dark'] #app::after {
+  display: none !important;
+  content: none !important;
+  opacity: 0 !important;
+}

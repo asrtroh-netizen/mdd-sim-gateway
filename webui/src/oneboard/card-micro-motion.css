@@ -1,0 +1,177 @@
+/**
+ * OneBord — 卡片微动效系统（结构不变，增强呼吸感 / 层级 / 生命感）
+ */
+
+:root {
+  --ob-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ob-flag-breathe-duration: 9s;
+  --ob-delay-glow-duration: 2.8s;
+  --ob-status-pulse-duration: 2s;
+  --ob-noise-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+/* ── 页面 ambient：轻噪点 + 柔光 radial（暗黑 · 深海控制台） ── */
+[data-theme="dark"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.038;
+  background-image: var(--ob-noise-image);
+  background-size: 220px 220px;
+  mix-blend-mode: overlay;
+}
+
+[data-theme="dark"] #app::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 62% 44% at 50% 0%,
+    rgba(110, 181, 255, 0.07) 0%,
+    transparent 68%
+  );
+  mix-blend-mode: screen;
+}
+
+/* ── Keyframes ── */
+@keyframes ob-flag-atmo-breathe {
+  0%, 100% {
+    transform: translateY(-50%) translateX(-5px) rotate(-12deg) scale(var(--ob-flag-scale-min, 0.68));
+  }
+  50% {
+    transform: translateY(-50%) translateX(8px) rotate(-12deg) scale(var(--ob-flag-scale-max, 0.72));
+  }
+}
+
+@keyframes ob-flag-cine-breathe {
+  0%, 100% {
+    transform: translateY(-50%) translateX(-5px) rotate(-12deg) scale(1.05);
+  }
+  50% {
+    transform: translateY(-50%) translateX(8px) rotate(-12deg) scale(1.08);
+  }
+}
+
+@keyframes ob-delay-glow-breathe {
+  0%, 100% {
+    filter: brightness(1);
+    opacity: 1;
+  }
+  50% {
+    filter: brightness(1.08);
+    opacity: 0.94;
+  }
+}
+
+@keyframes ob-status-dot-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 8px currentColor;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.62;
+    box-shadow: 0 0 14px currentColor;
+  }
+}
+
+/* ── 1. 卡片 hover 浮起 ── */
+.dashboard-country-card,
+.country-node-card:not(.is-compact),
+.panel-card,
+.glass-stat {
+  transition:
+    transform 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.dashboard-country-card:hover,
+.country-node-card:not(.is-compact):hover,
+.panel-card:hover,
+.glass-stat:hover {
+  transform: translateY(-3px);
+}
+
+.country-node-card.is-compact:hover {
+  transform: none;
+}
+
+/* ── 2. 背景慢速呼吸 + 水平漂移 ── */
+.semantic-card-layers.is-atmospheric .semantic-card-layers__bg.cine-bg-flag,
+.semantic-card-layers.is-node-atmo .semantic-card-layers__bg.cine-bg-flag {
+  animation: ob-flag-atmo-breathe var(--ob-flag-breathe-duration) ease-in-out infinite;
+  will-change: transform;
+}
+
+.has-semantic-bg:not(.is-atmospheric):not(.is-node-atmo) .semantic-card-layers__bg.cine-bg-flag,
+.has-semantic-bg:not(.is-atmospheric):not(.is-node-atmo) .cine-bg-cover {
+  animation: ob-flag-cine-breathe var(--ob-flag-breathe-duration) ease-in-out infinite;
+  will-change: transform;
+}
+
+.dashboard-country-card:hover .semantic-card-layers.is-atmospheric .semantic-card-layers__bg.cine-bg-flag,
+.country-node-card:not(.is-compact):hover .semantic-card-layers.is-node-atmo .semantic-card-layers__bg.cine-bg-flag,
+.country-node-card:not(.is-compact):hover .semantic-card-layers:not(.is-node-atmo) .cine-bg-flag {
+  animation-play-state: paused;
+}
+
+/* ── 3. ms 延迟 badge 柔光呼吸 ── */
+.dcc-delay,
+.cnc-delay,
+.svc-delay,
+.cine-delay {
+  animation: ob-delay-glow-breathe var(--ob-delay-glow-duration) ease-in-out infinite;
+}
+
+/* ── 4. 在线 / 生效状态点 ── */
+.dcc-status.success .dcc-status-dot,
+.cnc-status.success .cnc-status-dot,
+.cnc-status.active .cnc-status-dot,
+.svc-status.success .svc-status-dot {
+  animation: ob-status-dot-pulse var(--ob-status-pulse-duration) ease-in-out infinite;
+  transform-origin: center;
+}
+
+.country-node-card.is-muted .cine-bg-flag,
+.country-node-card.is-muted .semantic-card-layers__bg.cine-bg-flag {
+  animation: none !important;
+}
+
+.country-node-card.is-compact.is-muted .semantic-card-layers__bg.cine-bg-flag,
+.country-node-card.is-compact.is-muted .cine-bg-flag {
+  animation: none !important;
+}
+
+.country-node-card.is-compact .semantic-card-layers:not(.is-node-atmo) .semantic-card-layers__bg.cine-bg-flag {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .semantic-card-layers__bg.cine-bg-flag,
+  .cine-bg-cover {
+    animation: none !important;
+  }
+
+  .dcc-delay,
+  .cnc-delay,
+  .svc-delay,
+  .cine-delay,
+  .dcc-status.success .dcc-status-dot,
+  .cnc-status.success .cnc-status-dot,
+  .cnc-status.active .cnc-status-dot {
+    animation: none !important;
+  }
+
+  .dashboard-country-card:hover,
+  .country-node-card:not(.is-compact):hover,
+  .panel-card:hover,
+  .glass-stat:hover {
+    transform: translateY(-2px);
+  }
+}

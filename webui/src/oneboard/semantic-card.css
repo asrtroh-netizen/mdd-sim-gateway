@@ -1,0 +1,106 @@
+/**
+ * Semantic Visual Asset System — LOGO + BACKGROUND + OVERLAY + CONTENT
+ */
+
+.semantic-card-layers {
+  position: relative;
+  overflow: hidden;
+}
+
+.semantic-card-layers__bg {
+  z-index: 0;
+}
+
+.semantic-card-layers__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.semantic-card-layers__noise {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: var(--cine-grain-opacity, 0.04);
+  background-image: var(--cine-grain-image);
+  background-size: 180px 180px;
+  mix-blend-mode: overlay;
+}
+
+.semantic-card-layers__rim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  box-shadow: var(--cine-inner-shadow);
+  pointer-events: none;
+}
+
+.semantic-card-layers.is-active .semantic-card-layers__rim,
+.country-node-card.is-active .semantic-card-layers__rim,
+.country-node-card.is-editing .semantic-card-layers__rim,
+.rule-group-card.is-active .semantic-card-layers__rim {
+  box-shadow: var(--cine-inner-shadow-selected);
+}
+
+.country-node-card.is-editing .semantic-card-layers__rim {
+  box-shadow: var(--cine-inner-shadow-active);
+}
+
+.semantic-card-layers__content {
+  position: relative;
+  z-index: 5;
+}
+
+/* 显式噪点层已启用，避免与 ::after 重复 */
+.semantic-card-layers:has(.semantic-card-layers__noise)::after {
+  display: none;
+}
+
+/* LOGO 层 — 品牌/语义锚点 */
+.semantic-card-logo {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.semantic-card-logo.is-flag {
+  width: 38px;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.semantic-card-logo.is-brand img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.semantic-card-logo.is-flag img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.semantic-card-layers::after {
+  z-index: 3;
+}

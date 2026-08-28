@@ -1,0 +1,198 @@
+/* Ported from OneBoard CountryNodeCard.vue scoped styles */
+
+.country-node-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius-card-sm, 14px);
+  overflow: hidden;
+  background: var(--ob-card-bg);
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+}
+
+.country-node-card.is-selectable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.country-node-card.is-selectable:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.65);
+  outline-offset: 2px;
+}
+
+.country-node-card.is-compact:hover {
+  transform: none;
+}
+
+.country-node-card.is-compact.is-muted:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+.country-node-card.is-compact:not(.is-muted):hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.cnc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 6px 12px;
+}
+
+.cnc-info {
+  min-width: 0;
+}
+
+.cnc-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 14px;
+  min-width: 88px;
+  flex-shrink: 0;
+  padding-left: 4px;
+}
+
+.country-node-card:not(.is-compact) .cnc-title {
+  line-height: 1.25;
+}
+
+.country-node-card:not(.is-compact) {
+  min-height: 100px;
+  background: var(--ob-card-bg);
+}
+
+.country-node-card:not(.is-compact) .cnc-body {
+  min-height: 100px;
+  padding: 12px 14px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.country-node-card:not(.is-compact) .cnc-meta {
+  gap: 6px;
+  justify-content: center;
+}
+
+.country-node-card:not(.is-compact) .cnc-effective {
+  padding: 2px 8px;
+  margin-top: 1px;
+}
+
+.cnc-meta-delay {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  margin-top: 4px;
+}
+
+.cnc-delay--ghost {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cnc-aside-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  line-height: 1.45;
+}
+
+.cnc-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cnc-sub {
+  line-height: 1.5;
+  margin-top: 1px;
+}
+
+.cnc-stat {
+  line-height: 1.35;
+}
+
+.cnc-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cnc-title {
+  min-width: 0;
+}
+
+.cnc-code {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.cnc-effective {
+  display: inline-flex;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cnc-effective.empty {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.cnc-badges-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* compact — WIFICALL 节点列表 */
+.country-node-card.is-compact {
+  min-height: 48px;
+  border-radius: 10px;
+  background: #000;
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: none;
+}
+
+.country-node-card.is-compact .cnc-body {
+  min-height: 48px;
+  padding: 5px 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.country-node-card.is-compact .cnc-aside {
+  gap: 6px;
+}
+
+.country-node-card.is-compact .cnc-delay {
+  padding: 1px 6px;
+}

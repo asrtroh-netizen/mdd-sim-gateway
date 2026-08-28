@@ -1,0 +1,118 @@
+/**
+ * OneBoard global line icon system (Lucide via MIcon)
+ */
+
+:root {
+  --ob-icon-stroke: 1.75;
+  --ob-icon-color: var(--text-secondary);
+  --ob-icon-color-hover: var(--text-primary);
+  --ob-icon-color-active: var(--accent);
+  --ob-icon-color-muted: var(--text-muted);
+  --ob-icon-container-radius: 10px;
+  --ob-icon-container-size: 32px;
+  --ob-icon-container-size-sm: 28px;
+  --ob-icon-container-size-lg: 38px;
+}
+
+[data-theme='dark'] {
+  --ob-icon-color: rgba(226, 232, 240, 0.9);
+  --ob-icon-color-hover: rgba(248, 250, 252, 0.98);
+  --ob-icon-color-active: #93c5fd;
+  --ob-icon-color-muted: rgba(203, 213, 225, 0.72);
+  --ob-icon-container-bg: rgba(255, 255, 255, 0.08);
+  --ob-icon-container-border: rgba(148, 163, 184, 0.22);
+  --ob-icon-container-glow: rgba(52, 211, 153, 0.14);
+}
+
+[data-theme='light'] {
+  --ob-icon-color: rgba(71, 85, 105, 0.82);
+  --ob-icon-color-hover: rgba(15, 23, 42, 0.88);
+  --ob-icon-color-active: #2563eb;
+  --ob-icon-color-muted: rgba(100, 116, 139, 0.62);
+  --ob-icon-container-bg: rgba(255, 255, 255, 0.72);
+  --ob-icon-container-border: rgba(148, 163, 184, 0.22);
+  --ob-icon-container-glow: rgba(96, 165, 250, 0.14);
+}
+
+.ob-icon {
+  flex-shrink: 0;
+  color: inherit;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.ob-icon--disabled {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.ob-icon-wrap,
+.panel-icon,
+.metric-card__icon,
+.panel-title-icon,
+.cp-nav-item__icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--ob-icon-color);
+  background: var(--ob-icon-container-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--ob-icon-container-border, rgba(255, 255, 255, 0.08));
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.panel-icon {
+  width: var(--ob-icon-container-size-lg);
+  height: var(--ob-icon-container-size-lg);
+  border-radius: var(--ob-icon-container-radius);
+  color: var(--ob-icon-color-active);
+}
+
+.metric-card__icon,
+.panel-title-icon {
+  width: var(--ob-icon-container-size);
+  height: var(--ob-icon-container-size);
+  border-radius: calc(var(--ob-icon-container-radius) - 2px);
+}
+
+.cp-nav-item__icon-wrap {
+  width: var(--ob-icon-container-size-sm);
+  height: var(--ob-icon-container-size-sm);
+  border-radius: 9px;
+}
+
+.panel-title-icon--green { color: #34d399; border-color: rgba(52, 211, 153, 0.28); background: rgba(52, 211, 153, 0.1); }
+.panel-title-icon--teal { color: #2dd4bf; border-color: rgba(45, 212, 191, 0.28); background: rgba(45, 212, 191, 0.1); }
+.panel-title-icon--purple { color: #a78bfa; border-color: rgba(167, 139, 250, 0.28); background: rgba(167, 139, 250, 0.1); }
+.panel-title-icon--amber { color: #fbbf24; border-color: rgba(251, 191, 36, 0.28); background: rgba(251, 191, 36, 0.1); }
+
+[data-theme='light'] .panel-title-icon--green { color: #059669; }
+[data-theme='light'] .panel-title-icon--teal { color: #0d9488; }
+[data-theme='light'] .panel-title-icon--purple { color: #7c3aed; }
+[data-theme='light'] .panel-title-icon--amber { color: #d97706; }
+
+.panel-btn .ob-icon,
+.panel-btn .ob-icon-wrap {
+  background: transparent;
+  border: none;
+  width: auto;
+  height: auto;
+}
+
+.panel-btn:hover .ob-icon,
+.cp-nav-item:hover .ob-icon {
+  color: inherit;
+}
+
+:is(.panel-btn, .panel-btn-ghost, .runtime-action-btn, .device-scroll-btn):hover:not(:disabled) .ob-icon {
+  color: var(--ob-icon-color-hover);
+}
+
+:is(.panel-btn, .panel-btn-ghost, .runtime-action-btn, .device-scroll-btn):disabled .ob-icon {
+  opacity: 0.38;
+}

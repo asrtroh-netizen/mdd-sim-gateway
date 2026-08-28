@@ -1,0 +1,739 @@
+/* 2025 Liquid Glass — 当代 dashboard 微调（扁平磨砂 / 单 accent / 清晰层级） */
+
+:root {
+  --sans: system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', 'Roboto', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  --mono: 'SF Mono', 'Roboto Mono', ui-monospace, 'Cascadia Code', monospace;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-title {
+  letter-spacing: -0.025em;
+  font-weight: 600;
+}
+
+.panel-title,
+.panel-title-lg {
+  letter-spacing: -0.015em;
+  font-weight: 600;
+}
+
+.nav-group-label {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  opacity: 0.88;
+}
+
+.factory-label {
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.progress-bar {
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill,
+.fill-purple,
+.fill-teal,
+.fill-pink {
+  border-radius: 999px;
+  transition: width 0.45s var(--ease-out);
+}
+
+.panel-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  box-shadow: none;
+}
+
+.panel-btn {
+  border-radius: 999px;
+  transition: background 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
+}
+
+.status-pill {
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.nav-item,
+.factory-card,
+.panel-card {
+  transition:
+    background 0.2s var(--ease-out),
+    border-color 0.2s var(--ease-out),
+    box-shadow 0.2s var(--ease-out);
+}
+
+/* 暗黑：去掉 Material 立体边，统一当代 flat glass */
+[data-theme="dark"] {
+  --accent: #5ac8fa;
+  --accent-hover: #7dd3fc;
+  --accent-soft: rgba(90, 200, 250, 0.14);
+  --glass-blur: 18px;
+  --glass-saturate: 118%;
+  --glass-rim: none;
+  --glass-shadow-inset: none;
+  --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  --glass-card: rgba(34, 34, 40, 0.72);
+  --border-glass: rgba(255, 255, 255, 0.11);
+  --sidebar-bg: rgba(26, 26, 30, 0.88);
+  --sidebar-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  --sidebar-nav-active-bg: rgba(90, 200, 250, 0.16);
+  --sidebar-nav-active-color: #ffffff;
+  --sidebar-nav-active-border: rgba(90, 200, 250, 0.28);
+  --sidebar-nav-active-shadow: none;
+  --stat-card-bg: rgba(34, 34, 40, 0.72);
+  --stat-card-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  --stat-card-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.22);
+  --stat-wave-stroke: #5ac8fa;
+  --stat-wave-fill-top: rgba(90, 200, 250, 0.16);
+  --toggle-bg: rgba(34, 34, 40, 0.72);
+
+  /* 左上角局部光感 — 范围收窄（大框专用） */
+  --corner-glow-ellipse-x: 72%;
+  --corner-glow-ellipse-y: 52%;
+  --corner-glow-origin-x: 0%;
+  --corner-glow-origin-y: -2%;
+  --corner-glow-mid: 30%;
+  --corner-glow-fade: 52%;
+  --corner-glow-a: rgba(90, 200, 250, 0.22);
+  --corner-glow-b: rgba(90, 200, 250, 0.06);
+  --corner-glow-base: linear-gradient(165deg, rgba(16, 16, 20, 0.97) 0%, rgba(10, 10, 14, 0.99) 100%);
+  --corner-glow-large-bg:
+    radial-gradient(
+      ellipse var(--corner-glow-ellipse-x) var(--corner-glow-ellipse-y)
+      at var(--corner-glow-origin-x) var(--corner-glow-origin-y),
+      var(--corner-glow-a) 0%,
+      var(--corner-glow-b) var(--corner-glow-mid),
+      transparent var(--corner-glow-fade)
+    ),
+    var(--corner-glow-base);
+  --corner-glow-bg: var(--corner-glow-large-bg);
+}
+
+/* 暗黑大框：已迁移至 glass-frame-dark.css */
+/*
+[data-theme="dark"] .card,
+...
+*/
+
+[data-theme="dark"] .panel-blue,
+[data-theme="dark"] .panel-card.panel-blue,
+[data-theme="dark"] .glass-blue {
+  --corner-glow-a: rgba(59, 130, 246, 0.28);
+  --corner-glow-b: rgba(59, 130, 246, 0.08);
+  --corner-glow-base: linear-gradient(165deg, rgba(14, 15, 22, 0.97) 0%, rgba(8, 9, 14, 0.99) 100%);
+}
+
+[data-theme="dark"] .panel-purple,
+[data-theme="dark"] .panel-card.panel-purple,
+[data-theme="dark"] .glass-purple {
+  --corner-glow-a: rgba(167, 139, 250, 0.26);
+  --corner-glow-b: rgba(167, 139, 250, 0.07);
+  --corner-glow-base: linear-gradient(165deg, rgba(18, 15, 24, 0.97) 0%, rgba(10, 8, 14, 0.99) 100%);
+}
+
+[data-theme="dark"] .panel-green,
+[data-theme="dark"] .panel-card.panel-green,
+[data-theme="dark"] .glass-green {
+  --corner-glow-a: rgba(52, 211, 153, 0.24);
+  --corner-glow-b: rgba(52, 211, 153, 0.07);
+  --corner-glow-base: linear-gradient(165deg, rgba(12, 18, 16, 0.97) 0%, rgba(7, 11, 10, 0.99) 100%);
+}
+
+/* 订阅卡 / 国旗行 — 区域底色 + 水印，无左上角辉光（辉光仅大框） */
+[data-theme="dark"] .subscription-card,
+[data-theme="light"] .subscription-card {
+  isolation: isolate;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.38) !important;
+}
+
+[data-theme="dark"] .subscription-card::before,
+[data-theme="light"] .subscription-card::before {
+  display: none;
+}
+
+/* ========== 国旗水印卡片统一处理（订阅 / 规则 / 控制台） ========== */
+[data-theme="dark"] :is(
+  .subscription-card,
+  .rule-card
+) :is(.region-scrim, .sub-scrim, .wifi-scrim) {
+  z-index: 2;
+  width: 46% !important;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.5) 0%,
+    rgba(0, 0, 0, 0.32) 42%,
+    rgba(0, 0, 0, 0.12) 72%,
+    transparent 100%
+  ) !important;
+}
+
+[data-theme="light"] :is(
+  .subscription-card,
+  .rule-card,
+  .console-app .wifi-card
+) :is(.region-scrim, .sub-scrim, .wifi-scrim) {
+  z-index: 2;
+  width: 46% !important;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.28) 0%,
+    rgba(0, 0, 0, 0.14) 42%,
+    rgba(0, 0, 0, 0.06) 72%,
+    transparent 100%
+  ) !important;
+}
+
+/* 长条列表 scrim / 水印见 console.css（策略行、区域摘要） */
+
+[data-theme="dark"] :is(
+  .subscription-card .region-watermark,
+  .subscription-card .sub-watermark:not(.sub-watermark-global-img),
+  .rule-card .sub-watermark:not(.sub-watermark-emoji),
+  .console-app .wifi-watermark:not(.wifi-watermark-global)
+) {
+  z-index: 1 !important;
+  opacity: 0.46 !important;
+  filter: saturate(1.12) brightness(1.18) !important;
+  -webkit-mask-image: radial-gradient(
+    ellipse 88% 120% at 72% 50%,
+    #000 0%,
+    rgba(0, 0, 0, 0.85) 35%,
+    rgba(0, 0, 0, 0.45) 58%,
+    transparent 78%
+  ) !important;
+  mask-image: radial-gradient(
+    ellipse 88% 120% at 72% 50%,
+    #000 0%,
+    rgba(0, 0, 0, 0.85) 35%,
+    rgba(0, 0, 0, 0.45) 58%,
+    transparent 78%
+  ) !important;
+}
+
+[data-theme="light"] :is(
+  .subscription-card .region-watermark,
+  .subscription-card .sub-watermark:not(.sub-watermark-global-img),
+  .rule-card .sub-watermark:not(.sub-watermark-emoji),
+  .console-app .wifi-watermark:not(.wifi-watermark-global)
+) {
+  z-index: 1 !important;
+  opacity: 0.52 !important;
+  filter: saturate(1.15) brightness(1.22) !important;
+  -webkit-mask-image: radial-gradient(
+    ellipse 88% 120% at 72% 50%,
+    #000 0%,
+    rgba(0, 0, 0, 0.85) 35%,
+    rgba(0, 0, 0, 0.45) 58%,
+    transparent 78%
+  ) !important;
+  mask-image: radial-gradient(
+    ellipse 88% 120% at 72% 50%,
+    #000 0%,
+    rgba(0, 0, 0, 0.85) 35%,
+    rgba(0, 0, 0, 0.45) 58%,
+    transparent 78%
+  ) !important;
+}
+
+[data-theme="dark"] :is(
+  .subscription-card .sub-watermark-global-img,
+  .rule-card .sub-watermark-emoji
+) {
+  z-index: 1 !important;
+  opacity: 0.32 !important;
+  filter: saturate(1.1) brightness(1.15) !important;
+}
+
+[data-theme="dark"] :is(
+  .subscription-card .region-icon,
+  .subscription-card .sub-icon,
+  .rule-card .sub-icon,
+  .console-app .strategy-row .row-icon,
+  .console-app .region-summary .summary-icon,
+  .console-app .wifi-card .wifi-icon
+) {
+  box-shadow: none !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+[data-theme="light"] :is(
+  .subscription-card .region-icon,
+  .subscription-card .sub-icon,
+  .rule-card .sub-icon,
+  .console-app .strategy-row .row-icon,
+  .console-app .region-summary .summary-icon,
+  .console-app .wifi-card .wifi-icon
+) {
+  box-shadow: none !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+[data-theme="dark"] .console-app .strategy-row::after,
+[data-theme="dark"] .console-app .region-summary::after,
+[data-theme="dark"] .console-app .flag-bg-panel::after,
+[data-theme="light"] .console-app .strategy-row::after,
+[data-theme="light"] .console-app .region-summary::after,
+[data-theme="light"] .console-app .flag-bg-panel::after {
+  display: none;
+}
+
+[data-theme="dark"] .console-app .strategy-row .row-body,
+[data-theme="dark"] .console-app .strategy-row .row-icon,
+[data-theme="dark"] .console-app .strategy-row .row-side,
+[data-theme="dark"] .console-app .region-summary .summary-body,
+[data-theme="dark"] .console-app .region-summary .summary-icon,
+[data-theme="dark"] .console-app .region-summary .summary-delay,
+[data-theme="dark"] .console-app .region-summary .summary-chevron,
+[data-theme="dark"] .console-app .wifi-card .wifi-body,
+[data-theme="dark"] .console-app .wifi-card .wifi-icon,
+[data-theme="light"] .console-app .strategy-row .row-body,
+[data-theme="light"] .console-app .strategy-row .row-icon,
+[data-theme="light"] .console-app .strategy-row .row-side,
+[data-theme="light"] .console-app .region-summary .summary-body,
+[data-theme="light"] .console-app .region-summary .summary-icon,
+[data-theme="light"] .console-app .region-summary .summary-delay,
+[data-theme="light"] .console-app .region-summary .summary-chevron,
+[data-theme="light"] .console-app .wifi-card .wifi-body,
+[data-theme="light"] .console-app .wifi-card .wifi-icon {
+  position: relative;
+  z-index: 3;
+}
+
+[data-theme="dark"] .subscription-card .region-body,
+[data-theme="dark"] .subscription-card .region-icon,
+[data-theme="dark"] .subscription-card .sub-body,
+[data-theme="dark"] .subscription-card .sub-icon,
+[data-theme="dark"] .subscription-card .sub-delay,
+[data-theme="dark"] .rule-card .sub-body,
+[data-theme="dark"] .rule-card .sub-icon,
+[data-theme="dark"] .rule-card .rule-actions,
+[data-theme="light"] .subscription-card .region-body,
+[data-theme="light"] .subscription-card .region-icon,
+[data-theme="light"] .subscription-card .sub-body,
+[data-theme="light"] .subscription-card .sub-icon,
+[data-theme="light"] .subscription-card .sub-delay,
+[data-theme="light"] .rule-card .sub-body,
+[data-theme="light"] .rule-card .sub-icon,
+[data-theme="light"] .rule-card .rule-actions {
+  position: relative;
+  z-index: 3;
+}
+
+[data-theme="dark"] .subscription-card.active {
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.28), 0 8px 32px rgba(0, 0, 0, 0.38) !important;
+}
+
+[data-theme="dark"] .subscription-card[data-region='HK'] {
+  background: linear-gradient(165deg, rgba(24, 10, 10, 0.97) 0%, rgba(10, 5, 5, 0.99) 100%) !important;
+}
+
+[data-theme="dark"] .subscription-card[data-region='GB'] {
+  background: linear-gradient(165deg, rgba(12, 14, 24, 0.97) 0%, rgba(6, 7, 12, 0.99) 100%) !important;
+}
+
+[data-theme="dark"] .subscription-card[data-region='DE'] {
+  background: linear-gradient(165deg, rgba(16, 14, 10, 0.97) 0%, rgba(8, 7, 5, 0.99) 100%) !important;
+}
+
+[data-theme="dark"] .subscription-card[data-region='US'] {
+  background: linear-gradient(165deg, rgba(12, 12, 20, 0.97) 0%, rgba(6, 6, 10, 0.99) 100%) !important;
+}
+
+[data-theme="dark"] .subscription-card[data-region='CN'] {
+  background: linear-gradient(165deg, rgba(22, 10, 10, 0.97) 0%, rgba(10, 5, 5, 0.99) 100%) !important;
+}
+
+[data-theme="dark"] .subscription-card[data-region='JP'],
+[data-theme="dark"] .subscription-card[data-region='SG'],
+[data-theme="dark"] .subscription-card[data-region='TW'],
+[data-theme="dark"] .subscription-card[data-region='KR'],
+[data-theme="dark"] .subscription-card[data-region='NZ'] {
+  background: linear-gradient(165deg, rgba(12, 16, 14, 0.97) 0%, rgba(7, 10, 9, 0.99) 100%) !important;
+}
+
+[data-theme="dark"] .subscription-card[data-region='GLOBAL'] {
+  background: linear-gradient(165deg, rgba(14, 15, 22, 0.97) 0%, rgba(8, 9, 14, 0.99) 100%) !important;
+}
+
+[data-theme="light"] .subscription-card[data-region='HK'] {
+  background:
+    radial-gradient(ellipse var(--corner-glow-ellipse-x, 72%) var(--corner-glow-ellipse-y, 52%) at var(--corner-glow-origin-x, 0%) var(--corner-glow-origin-y, -2%), rgba(139, 26, 26, 0.28) 0%, rgba(139, 26, 26, 0.08) 30%, transparent 52%),
+    rgba(70, 74, 80, 0.62) !important;
+}
+
+[data-theme="light"] .subscription-card[data-region='GB'] {
+  background:
+    radial-gradient(ellipse var(--corner-glow-ellipse-x, 72%) var(--corner-glow-ellipse-y, 52%) at var(--corner-glow-origin-x, 0%) var(--corner-glow-origin-y, -2%), rgba(30, 58, 138, 0.26) 0%, rgba(30, 58, 138, 0.08) 30%, transparent 52%),
+    rgba(70, 74, 80, 0.62) !important;
+}
+
+[data-theme="light"] .subscription-card[data-region='DE'] {
+  background:
+    radial-gradient(ellipse var(--corner-glow-ellipse-x, 72%) var(--corner-glow-ellipse-y, 52%) at var(--corner-glow-origin-x, 0%) var(--corner-glow-origin-y, -2%), rgba(180, 130, 20, 0.24) 0%, rgba(180, 130, 20, 0.07) 30%, transparent 52%),
+    rgba(70, 74, 80, 0.62) !important;
+}
+
+[data-theme="light"] .subscription-card[data-region='US'] {
+  background:
+    radial-gradient(ellipse var(--corner-glow-ellipse-x, 72%) var(--corner-glow-ellipse-y, 52%) at var(--corner-glow-origin-x, 0%) var(--corner-glow-origin-y, -2%), rgba(30, 58, 138, 0.3) 0%, rgba(30, 58, 138, 0.09) 30%, transparent 52%),
+    rgba(70, 74, 80, 0.62) !important;
+}
+
+[data-theme="light"] .subscription-card[data-region='CN'] {
+  background:
+    radial-gradient(ellipse var(--corner-glow-ellipse-x, 72%) var(--corner-glow-ellipse-y, 52%) at var(--corner-glow-origin-x, 0%) var(--corner-glow-origin-y, -2%), rgba(200, 50, 50, 0.26) 0%, rgba(200, 50, 50, 0.08) 30%, transparent 52%),
+    rgba(70, 74, 80, 0.62) !important;
+}
+
+[data-theme="light"] .subscription-card[data-region='JP'],
+[data-theme="light"] .subscription-card[data-region='SG'],
+[data-theme="light"] .subscription-card[data-region='TW'],
+[data-theme="light"] .subscription-card[data-region='KR'],
+[data-theme="light"] .subscription-card[data-region='NZ'] {
+  background:
+    radial-gradient(ellipse var(--corner-glow-ellipse-x, 72%) var(--corner-glow-ellipse-y, 52%) at var(--corner-glow-origin-x, 0%) var(--corner-glow-origin-y, -2%), rgba(52, 211, 153, 0.22) 0%, rgba(52, 211, 153, 0.07) 30%, transparent 52%),
+    rgba(70, 74, 80, 0.62) !important;
+}
+
+[data-theme="light"] .subscription-card[data-region='GLOBAL'] {
+  background:
+    radial-gradient(ellipse var(--corner-glow-ellipse-x, 72%) var(--corner-glow-ellipse-y, 52%) at var(--corner-glow-origin-x, 0%) var(--corner-glow-origin-y, -2%), rgba(71, 163, 255, 0.22) 0%, rgba(71, 163, 255, 0.07) 30%, transparent 52%),
+    rgba(70, 74, 80, 0.62) !important;
+}
+
+/* 控制台 / 规则页国旗卡片 — 区域底色，无大框辉光 */
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+) {
+  background: var(--corner-glow-base) !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.38) !important;
+}
+
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='HK'] {
+  --corner-glow-a: rgba(139, 26, 26, 0.26);
+  --corner-glow-b: rgba(139, 26, 26, 0.08);
+  --corner-glow-base: linear-gradient(165deg, rgba(24, 10, 10, 0.97) 0%, rgba(10, 5, 5, 0.99) 100%);
+}
+
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='GB'] {
+  --corner-glow-a: rgba(30, 58, 138, 0.26);
+  --corner-glow-b: rgba(30, 58, 138, 0.08);
+  --corner-glow-base: linear-gradient(165deg, rgba(12, 14, 24, 0.97) 0%, rgba(6, 7, 12, 0.99) 100%);
+}
+
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='DE'] {
+  --corner-glow-a: rgba(180, 130, 20, 0.24);
+  --corner-glow-b: rgba(180, 130, 20, 0.07);
+  --corner-glow-base: linear-gradient(165deg, rgba(16, 14, 10, 0.97) 0%, rgba(8, 7, 5, 0.99) 100%);
+}
+
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='US'] {
+  --corner-glow-a: rgba(30, 58, 138, 0.28);
+  --corner-glow-b: rgba(30, 58, 138, 0.08);
+  --corner-glow-base: linear-gradient(165deg, rgba(12, 12, 20, 0.97) 0%, rgba(6, 6, 10, 0.99) 100%);
+}
+
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='CN'] {
+  --corner-glow-a: rgba(200, 50, 50, 0.26);
+  --corner-glow-b: rgba(200, 50, 50, 0.08);
+  --corner-glow-base: linear-gradient(165deg, rgba(22, 10, 10, 0.97) 0%, rgba(10, 5, 5, 0.99) 100%);
+}
+
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='JP'],
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='SG'],
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='TW'],
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='KR'],
+[data-theme="dark"] :is(
+  .rule-card,
+  .console-app .strategy-row,
+  .console-app .region-summary,
+  .console-app .flag-bg-panel,
+  .console-app .region-panel,
+  .console-app .strategy-panel,
+  .console-app .wifi-card
+)[data-region='NZ'] {
+  --corner-glow-a: rgba(52, 211, 153, 0.22);
+  --corner-glow-b: rgba(52, 211, 153, 0.07);
+  --corner-glow-base: linear-gradient(165deg, rgba(12, 16, 14, 0.97) 0%, rgba(7, 10, 9, 0.99) 100%);
+}
+
+[data-theme="dark"] .rule-card.tint-0 {
+  --corner-glow-a: rgba(59, 130, 246, 0.22);
+  --corner-glow-b: rgba(59, 130, 246, 0.06);
+  --corner-glow-base: linear-gradient(165deg, rgba(14, 15, 22, 0.97) 0%, rgba(8, 9, 14, 0.99) 100%);
+}
+
+[data-theme="dark"] .rule-card.tint-1 {
+  --corner-glow-a: rgba(167, 139, 250, 0.22);
+  --corner-glow-b: rgba(167, 139, 250, 0.06);
+  --corner-glow-base: linear-gradient(165deg, rgba(18, 15, 24, 0.97) 0%, rgba(10, 8, 14, 0.99) 100%);
+}
+
+[data-theme="dark"] .rule-card.tint-2 {
+  --corner-glow-a: rgba(52, 211, 153, 0.2);
+  --corner-glow-b: rgba(52, 211, 153, 0.06);
+  --corner-glow-base: linear-gradient(165deg, rgba(12, 18, 16, 0.97) 0%, rgba(7, 11, 10, 0.99) 100%);
+}
+
+[data-theme="dark"] .rule-card.tint-3 {
+  --corner-glow-a: rgba(251, 146, 60, 0.2);
+  --corner-glow-b: rgba(251, 146, 60, 0.06);
+  --corner-glow-base: linear-gradient(165deg, rgba(22, 18, 14, 0.97) 0%, rgba(12, 10, 8, 0.99) 100%);
+}
+
+[data-theme="dark"] .rule-card {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.38) !important;
+}
+
+[data-theme="dark"] .glass-inner,
+[data-theme="dark"] .panel-icon {
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .panel-icon {
+  color: var(--accent);
+  background: rgba(90, 200, 250, 0.12) !important;
+  border-color: rgba(90, 200, 250, 0.2) !important;
+}
+
+[data-theme="dark"] .fill-purple,
+[data-theme="dark"] .fill-teal,
+[data-theme="dark"] .fill-pink,
+[data-theme="dark"] .progress-fill.blue,
+[data-theme="dark"] .progress-fill.green,
+[data-theme="dark"] .progress-fill.orange {
+  background: #5ac8fa;
+}
+
+/* 仪表盘信息三列：深浅色共用结构 */
+[data-theme="dark"] .dashboard-shell .info-row .panel-blue .panel-icon,
+[data-theme="dark"] .info-row .panel-blue .panel-icon {
+  color: #93b8ff;
+  background: rgba(59, 130, 246, 0.12) !important;
+  border-color: rgba(59, 130, 246, 0.18) !important;
+}
+
+[data-theme="dark"] .dashboard-shell .info-row .panel-purple .panel-icon,
+[data-theme="dark"] .info-row .panel-purple .panel-icon {
+  color: #c4b5fd;
+  background: rgba(167, 139, 250, 0.12) !important;
+  border-color: rgba(167, 139, 250, 0.18) !important;
+}
+
+[data-theme="dark"] .dashboard-shell .info-row .panel-green .panel-icon,
+[data-theme="dark"] .info-row .panel-green .panel-icon {
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, 0.12) !important;
+  border-color: rgba(52, 211, 153, 0.18) !important;
+}
+
+[data-theme="light"] .dashboard-shell .info-row .panel-blue .panel-icon {
+  color: #2563eb;
+  background: rgba(79, 140, 255, 0.12) !important;
+  border-color: rgba(79, 140, 255, 0.18) !important;
+}
+
+[data-theme="light"] .dashboard-shell .info-row .panel-purple .panel-icon {
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.12) !important;
+  border-color: rgba(99, 102, 241, 0.18) !important;
+}
+
+[data-theme="light"] .dashboard-shell .info-row .panel-green .panel-icon {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.12) !important;
+  border-color: rgba(5, 150, 105, 0.18) !important;
+}
+
+[data-theme="dark"] .info-row .fill-purple {
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.9), rgba(129, 140, 248, 0.9));
+}
+
+[data-theme="dark"] .info-row .fill-teal {
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.9), rgba(52, 211, 153, 0.9));
+}
+
+[data-theme="dark"] .info-row .fill-pink {
+  background: linear-gradient(90deg, rgba(251, 113, 133, 0.9), rgba(244, 114, 182, 0.9));
+}
+
+[data-theme="dark"] .info-row .panel-btn {
+  margin-top: 16px;
+}
+
+[data-theme="dark"] .region-card.tint-0 .region-count,
+[data-theme="dark"] .region-card.tint-1 .region-count,
+[data-theme="dark"] .region-card.tint-2 .region-count,
+[data-theme="dark"] .region-card.tint-3 .region-count {
+  color: var(--accent);
+}
+
+/* 浅色主题变量见 themes.css */
+
+[data-theme="light"] .sidebar .nav-item.active {
+  font-weight: 600;
+}
+
+[data-theme="light"] .panel-icon {
+  border-radius: 11px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-theme="light"] .app-shell,
+  [data-theme="light"] .sidebar,
+  [data-theme="light"] .factory-card,
+  [data-theme="light"] .panel-card,
+  [data-theme="light"] .hostname-banner,
+  [data-theme="light"] .region-card {
+    backdrop-filter: blur(12px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(120%) !important;
+  }
+
+  [data-theme="dark"] .card,
+  [data-theme="dark"] .factory-card,
+  [data-theme="dark"] .panel-card,
+  [data-theme="dark"] .hostname-banner,
+[data-theme="dark"] .stream-hero.panel-card,
+[data-theme="dark"] .stream-hero.panel-neutral,
+  [data-theme="dark"] .subscription-card,
+  [data-theme="dark"] .theme-toggle {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  [data-theme="dark"] .subscription-card {
+    /* 保留地区渐变，仅去掉 blur */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  [data-theme="light"] .app-shell {
+    background: transparent !important;
+  }
+
+  [data-theme="light"] .sidebar,
+  [data-theme="light"] .factory-card,
+  [data-theme="light"] .panel-card,
+  [data-theme="light"] .hostname-banner {
+    background: rgba(255, 255, 255, 0.88) !important;
+  }
+
+  [data-theme="light"] .factory-card::before,
+  [data-theme="light"] .panel-card::before,
+  [data-theme="light"] .hostname-banner::before,
+  [data-theme="light"] .cp-sidebar::before,
+  [data-theme="light"] .stream-hero::before {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(12px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(120%) !important;
+  }
+
+  [data-theme="dark"] .card,
+  [data-theme="dark"] .factory-card,
+  [data-theme="dark"] .panel-card,
+  [data-theme="dark"] .hostname-banner,
+[data-theme="dark"] .stream-hero.panel-card,
+[data-theme="dark"] .stream-hero.panel-neutral,
+  [data-theme="dark"] .theme-toggle {
+    background: rgba(14, 14, 18, 0.98) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-item,
+  .factory-card,
+  .panel-card,
+  .panel-btn,
+  .progress-fill,
+  .wave-line {
+    transition: none !important;
+  }
+}

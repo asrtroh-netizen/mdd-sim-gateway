@@ -6,6 +6,7 @@ import Esim from './views/Esim.jsx'
 import Keepalive from './views/Keepalive.jsx'
 import { UnifiedOverview, DevicesPage, EgressPage, NotificationsPage, SystemPage, DiagnosticsPage } from './views/UnifiedPages.jsx'
 import { useI18n } from './i18n.jsx'
+import { isUiPreview, previewAuth, previewCards, previewDevices, previewInstances, previewSystemMeta } from './previewFixtures.js'
 
 const NAV = [
   ['overview', 'Overview', '⌂'], ['devices', 'Devices', '▣'], ['calls', 'Calls', '☎'],
@@ -111,14 +112,27 @@ export default function App() {
   const [discovering, setDiscovering] = useState(true)
   const [selected, setSelected] = useState(null); const [toast, setToast] = useState(null)
   const [selectedDeviceId, setSelectedDeviceId] = useState(null)
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'auto')
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [systemMeta, setSystemMeta] = useState({ version: '', repository_url: '' })
   const [updateOpen, setUpdateOpen] = useState(false)
   const [authState, setAuthState] = useState(null)
   const wsEvents = useRef({ handlers: new Set() }); const toastTimer = useRef(null); const unifiedAvailable = useRef(false)
   const refreshInFlight = useRef(false)
 
-  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('theme', theme) }, [theme])
+  useEffect(() => {
+    const apply = () => {
+      const resolved = theme === 'auto'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : theme
+      document.documentElement.dataset.theme = resolved
+    }
+    apply()
+    localStorage.setItem('theme', theme)
+    if (theme !== 'auto') return undefined
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener('change', apply)
+    return () => media.removeEventListener('change', apply)
+  }, [theme])
   // Keep the address bar on the current page without growing history, and follow the hash
   // when the user edits it or navigates back/forward (replaceState never fires hashchange,
   // so the two effects cannot feed each other).
@@ -139,6 +153,14 @@ export default function App() {
   },[])
 
   const refresh = useCallback(async () => {
+    if (isUiPreview()) {
+      setInstances(previewInstances)
+      setCards(previewCards)
+      setDevices(previewDevices)
+      setDiscovering(false)
+      unifiedAvailable.current = true
+      return
+    }
     if (refreshInFlight.current) return
     refreshInFlight.current = true
     try {
@@ -172,7 +194,15 @@ export default function App() {
     window.addEventListener('mdd-auth-expired',expireAuth)
     return()=>window.removeEventListener('mdd-auth-expired',expireAuth)
   },[expireAuth])
-  useEffect(()=>{ api.authStatus().then(s=>{ setCsrf(s.csrf); setAuthState(s) }).catch(()=>setAuthState({configured:true,authenticated:false})) },[])
+  useEffect(()=>{
+    if (isUiPreview()) {
+      setCsrf(previewAuth.csrf)
+      setAuthState(previewAuth)
+      setSystemMeta(s => ({ ...s, ...previewSystemMeta }))
+      return
+    }
+    api.authStatus().then(s=>{ setCsrf(s.csrf); setAuthState(s) }).catch(()=>setAuthState({configured:true,authenticated:false}))
+  },[])
   useEffect(()=>{ if(authState?.authenticated) refresh() },[authState?.authenticated]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{ if(!authState?.authenticated)return;
     // Status refreshes must retain release/repository metadata loaded by separate requests.
@@ -189,7 +219,7 @@ export default function App() {
   }).catch(()=>{})},[authState?.authenticated,showToast,t])
   useEffect(()=>{ if(!authState?.authenticated)return; const timer=setInterval(refresh,10000); return()=>clearInterval(timer) },[refresh,authState?.authenticated])
 
-  useEffect(()=>{ if(!authState?.authenticated)return; return connectWs(msg=>{
+  useEffect(()=>{ if(!authState?.authenticated || isUiPreview())return; return connectWs(msg=>{
     if(msg.type==='status'){
       const status=Object.fromEntries(Object.entries(msg).filter(([k])=>!['type','instance'].includes(k)))
       setInstances(list=>list.map(i=>String(i.id)===String(msg.instance)?{...i,status}:i))
@@ -220,18 +250,80 @@ export default function App() {
     notifications:<NotificationsPage {...common}/>, settings:<SystemPage {...common}/>, diagnostics:<DiagnosticsPage {...common}/>,
   }[view]
   const issueUrl = `${(systemMeta.repository_url || 'https://github.com/MddIdd/mdd-sim-gateway').replace(/\/$/, '')}/issues/new/choose`
-  return <div className="u-shell">
-    <aside className={`u-sidebar ${menuOpen?'open':''}`}>
-      <div className="u-brand"><img src="/logo.svg" alt="" /><div>MDD Sim Gateway<small>{t('4G + VoWiFi unified')}</small></div></div>
-      <nav>{NAV.map(([key,label,icon])=><button key={key} className={view===key?'active':''} onClick={()=>{setView(key);setMenuOpen(false)}}><span>{icon}</span>{t(label)}{key==='diagnostics'&&!!systemMeta.host_alerts?.length&&<i className={`u-nav-dot ${systemMeta.host_alerts.some(a=>a.severity==='critical')?'critical':'warning'}`} title={t('The gateway host needs attention')}/>}{key==='calls'&&!!systemMeta.unheard_voicemails&&<i className="u-nav-dot critical" title={t('There are voicemails you have not played')}/>}</button>)}</nav>
-      <div className="u-sidebar-foot"><div className="u-theme">{[['auto','◐'],['light','☀'],['dark','☾']].map(([k,x])=><button key={k} className={theme===k?'active':''} onClick={()=>setTheme(k)} title={t(k)}>{x}</button>)}</div><small>{discovering&&!devices.length?t('Detecting devices…'):`${devices.length} ${t(devices.length === 1 ? 'device' : 'devices')}`}</small><a className="u-feedback-link" href={issueUrl} target="_blank" rel="noreferrer"><span>◉</span>{t('Issues and suggestions')}<b>↗</b></a><div className="u-project-meta">{systemMeta.update?.update_available&&systemMeta.update?.release_url?<a className="u-version has-update" href={systemMeta.update.release_url} onClick={e=>{e.preventDefault();setUpdateOpen(true)}} title={t('New version available: v{version}',{version:systemMeta.update.latest})}><i />v{systemMeta.version}</a>:<span className="u-version">{systemMeta.version ? `v${systemMeta.version}` : '—'}</span>}<span className="u-repo-actions">{systemMeta.repository_url&&<><a href={systemMeta.repository_url} target="_blank" rel="noreferrer" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.52-1.34-1.29-1.69-1.29-1.69-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.29-5.27-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.75 0c2.19-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a><a className="u-star-link" href={systemMeta.repository_url} target="_blank" rel="noreferrer" aria-label={t('Star on GitHub')} title={t('Star on GitHub')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.75 5.58 6.16.9-4.46 4.34 1.05 6.13L12 16.76l-5.5 2.89 1.05-6.13-4.46-4.34 6.16-.9L12 2.7Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg><b>{starCount(systemMeta.update?.stars) || '—'}</b></a></>}</span></div><button className="btn btn-ghost" onClick={async()=>{try{await api.authLogout()}finally{setCsrf('');setAuthState(s=>({...s,configured:true,authenticated:false,csrf:''}))}}}>{t('Sign out')}</button></div>
-    </aside>
-    <button className="u-menu" onClick={()=>setMenuOpen(!menuOpen)}>☰</button>
-    {menuOpen&&<button className="u-scrim" aria-label={t('Close menu')} onClick={()=>setMenuOpen(false)}/>}
-    <main className="u-main"><header><div><h1>{t(NAV.find(x=>x[0]===view)?.[1]||view)}</h1><p>{t(`page.${view}.subtitle`)}</p></div><div className="u-live"><span className="u-dot" />{unifiedAvailable.current?t('Live device control'):t('Compatibility view')}</div></header><div className="u-content"><div className="u-note" role="note">{t('Responsible use notice')}</div>{content}</div></main>
-    {toast&&<div className="u-toast" key={toast.id} role="status">{toast.message}</div>}
-    {updateOpen&&systemMeta.update?.update_available&&<UpdateModal update={systemMeta.update} current={systemMeta.version} t={t} onClose={()=>setUpdateOpen(false)}/>}
-  </div>
+  return (
+    <div className="layout" data-layout-ready="true">
+      <div className={`app-shell${isUiPreview() ? ' is-preview' : ''}`}>
+        <aside className={`cp-sidebar${menuOpen ? ' open' : ''}`}>
+          <div className="cp-sidebar__dock">
+            <header className="cp-sidebar__nameplate" aria-label="MDD">
+              <div className="cp-sidebar__avatar"><img src="/logo.svg" alt="" /></div>
+              <h2 className="cp-sidebar__name">MDD</h2>
+              <p className="cp-sidebar__host">{t('4G + VoWiFi unified')}</p>
+              <div className="cp-sidebar__badges">
+                <span className="cp-sidebar__badge cp-sidebar__badge--live">{unifiedAvailable.current ? t('Live device control') : t('Compatibility view')}</span>
+                <span className="cp-sidebar__badge">MDD</span>
+              </div>
+            </header>
+            <nav className="cp-sidebar__rail" aria-label={t('Overview')}>
+              {NAV.map(([key, label, icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`cp-nav-item${view === key ? ' active' : ''}`}
+                  onClick={() => { setView(key); setMenuOpen(false) }}
+                >
+                  <span className="cp-nav-item__icon-wrap"><span className="cp-nav-item__icon">{icon}</span></span>
+                  <span className="cp-nav-item__label">{t(label)}</span>
+                  {key === 'diagnostics' && !!systemMeta.host_alerts?.length && (
+                    <i className={`u-nav-dot ${systemMeta.host_alerts.some(a => a.severity === 'critical') ? 'critical' : 'warning'}`} title={t('The gateway host needs attention')} />
+                  )}
+                  {key === 'calls' && !!systemMeta.unheard_voicemails && (
+                    <i className="u-nav-dot critical" title={t('There are voicemails you have not played')} />
+                  )}
+                </button>
+              ))}
+            </nav>
+            <footer className="cp-sidebar__dock-foot">
+              <div className="u-theme">{[['auto', '◐'], ['light', '☀'], ['dark', '☾']].map(([k, x]) => (
+                <button key={k} className={theme === k ? 'active' : ''} onClick={() => setTheme(k)} title={t(k)}>{x}</button>
+              ))}</div>
+              <small>{discovering && !devices.length ? t('Detecting devices…') : `${devices.length} ${t(devices.length === 1 ? 'device' : 'devices')}`}</small>
+              <a className="u-feedback-link" href={issueUrl} target="_blank" rel="noreferrer"><span>◉</span>{t('Issues and suggestions')}<b>↗</b></a>
+              <div className="u-project-meta">
+                {systemMeta.update?.update_available && systemMeta.update?.release_url
+                  ? <a className="u-version has-update" href={systemMeta.update.release_url} onClick={e => { e.preventDefault(); setUpdateOpen(true) }} title={t('New version available: v{version}', { version: systemMeta.update.latest })}><i />v{systemMeta.version}</a>
+                  : <span className="u-version">{systemMeta.version ? `v${systemMeta.version}` : '—'}</span>}
+                <span className="u-repo-actions">{systemMeta.repository_url && <>
+                  <a href={systemMeta.repository_url} target="_blank" rel="noreferrer" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.52-1.34-1.29-1.69-1.29-1.69-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.38.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.29-5.27-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.75 0c2.19-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a>
+                  <a className="u-star-link" href={systemMeta.repository_url} target="_blank" rel="noreferrer" aria-label={t('Star on GitHub')} title={t('Star on GitHub')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.7 2.75 5.58 6.16.9-4.46 4.34 1.05 6.13L12 16.76l-5.5 2.89 1.05-6.13-4.46-4.34 6.16-.9L12 2.7Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg><b>{starCount(systemMeta.update?.stars) || '—'}</b></a>
+                </>}</span>
+              </div>
+              <button className="btn btn-ghost" onClick={async () => { try { await api.authLogout() } finally { setCsrf(''); setAuthState(s => ({ ...s, configured: true, authenticated: false, csrf: '' })) } }}>{t('Sign out')}</button>
+            </footer>
+          </div>
+        </aside>
+        <button className="u-menu" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
+        {menuOpen && <button className="u-scrim" aria-label={t('Close menu')} onClick={() => setMenuOpen(false)} />}
+        <main className="content">
+          <div className="content-inner">
+            <header className="mdd-page-head">
+              <div>
+                <h1>{t(NAV.find(x => x[0] === view)?.[1] || view)}</h1>
+                <p>{t(`page.${view}.subtitle`)}</p>
+              </div>
+              <div className="u-live"><span className="u-dot" />{unifiedAvailable.current ? t('Live device control') : t('Compatibility view')}</div>
+            </header>
+            <div className="u-content">
+              <div className="u-note" role="note">{t('Responsible use notice')}</div>
+              {content}
+            </div>
+          </div>
+        </main>
+      </div>
+      {toast && <div className="u-toast" key={toast.id} role="status">{toast.message}</div>}
+      {updateOpen && systemMeta.update?.update_available && <UpdateModal update={systemMeta.update} current={systemMeta.version} t={t} onClose={() => setUpdateOpen(false)} />}
+    </div>
+  )
 }
 
 const UPDATE_PHASES = {
