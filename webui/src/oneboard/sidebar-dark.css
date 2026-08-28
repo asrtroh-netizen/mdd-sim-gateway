@@ -1,0 +1,323 @@
+/**
+ * Sidebar — unified floating glass dock
+ */
+
+.layout {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.app-shell {
+  overflow: hidden !important;
+}
+
+.cp-sidebar {
+  position: relative;
+  align-self: center;
+  width: var(--cp-sidebar-width, 196px);
+  flex-shrink: 0;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  z-index: 30;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ── Single glass dock shell ── */
+
+.cp-sidebar__dock {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: min(86vh, 720px);
+  min-height: 0;
+  padding: var(--cp-dock-pad-y) var(--cp-dock-pad-x);
+  border-radius: var(--cp-dock-radius);
+  background: var(--cp-dock-bg);
+  border: 1px solid var(--cp-dock-border);
+  box-shadow: var(--cp-dock-shadow);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  overflow: hidden;
+}
+
+[data-theme='dark'] .cp-sidebar__dock {
+  box-shadow:
+    var(--cp-dock-shadow),
+    0 0 48px rgba(34, 197, 94, 0.04);
+}
+
+[data-theme='light'] .cp-sidebar__dock {
+  box-shadow:
+    var(--cp-dock-shadow),
+    0 0 40px rgba(147, 197, 253, 0.12);
+}
+
+/* ── User nameplate ── */
+
+.cp-sidebar__nameplate {
+  flex: 0 0 auto;
+  padding: 4px 4px 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--cp-dock-divider);
+}
+
+.cp-sidebar__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
+  box-shadow:
+    0 0 0 1px rgba(148, 163, 184, 0.16),
+    0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+[data-theme='dark'] .cp-sidebar__avatar {
+  box-shadow:
+    0 0 0 1px rgba(94, 234, 212, 0.14),
+    0 0 24px rgba(52, 211, 153, 0.08);
+}
+
+[data-theme='dark'] .cp-sidebar__name {
+  color: rgba(248, 250, 252, 0.98);
+}
+
+[data-theme='dark'] .cp-sidebar__host {
+  color: rgba(203, 213, 225, 0.88);
+}
+
+[data-theme='dark'] .cp-sidebar__badge {
+  color: rgba(226, 232, 240, 0.78);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+[data-theme='dark'] .cp-nav-item__icon-wrap {
+  color: rgba(203, 213, 225, 0.88);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.cp-sidebar__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+
+.cp-sidebar__host {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.cp-sidebar__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.cp-sidebar__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--cp-dock-divider);
+}
+
+.cp-sidebar__badge--live {
+  color: var(--green);
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+[data-theme='light'] .cp-sidebar__badge--live {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.08);
+  border-color: rgba(5, 150, 105, 0.18);
+}
+
+/* ── Icon navigation rail ── */
+
+.cp-sidebar__rail {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 0;
+  max-height: min(52vh, 480px);
+  overflow-y: auto;
+  padding: 12px 2px;
+  scrollbar-width: none;
+}
+
+.cp-sidebar__rail::-webkit-scrollbar {
+  display: none;
+}
+
+.cp-sidebar__rail-divider {
+  height: 1px;
+  margin: 8px 6px;
+  background: var(--cp-dock-divider);
+}
+
+.cp-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--cp-nav-color);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 0.22s ease,
+    background 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    transform 0.22s ease;
+}
+
+.cp-nav-item__icon {
+  color: inherit;
+  opacity: 1;
+}
+
+.cp-nav-item__label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cp-nav-item:hover {
+  color: var(--cp-nav-hover-color);
+  background: var(--cp-nav-hover-bg);
+  transform: translateX(1px);
+}
+
+.cp-nav-item:hover .cp-nav-item__icon-wrap {
+  border-color: rgba(148, 163, 184, 0.28);
+  color: var(--cp-nav-hover-color);
+}
+
+.cp-nav-item.active {
+  color: var(--cp-nav-active-color);
+  font-weight: 600;
+  background: var(--cp-nav-active-bg);
+  border-color: var(--cp-nav-active-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    var(--cp-nav-active-glow);
+}
+
+.cp-nav-item.active .cp-nav-item__icon-wrap {
+  color: var(--cp-nav-active-color);
+  background: rgba(52, 211, 153, 0.14);
+  border-color: rgba(110, 231, 183, 0.32);
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.1);
+}
+
+[data-theme='light'] .cp-nav-item.active .cp-nav-item__icon-wrap {
+  background: rgba(94, 234, 212, 0.16);
+  border-color: rgba(45, 212, 191, 0.32);
+  box-shadow: 0 4px 12px rgba(45, 212, 191, 0.12);
+}
+
+.cp-nav-item--aux {
+  font-size: 12px;
+  min-height: 36px;
+}
+
+.cp-nav-item--danger {
+  color: rgba(248, 113, 113, 0.82);
+}
+
+.cp-nav-item--danger:hover {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.cp-nav-item--danger .cp-nav-item__icon-wrap {
+  color: inherit;
+  background: rgba(248, 113, 113, 0.06);
+  border-color: rgba(248, 113, 113, 0.16);
+}
+
+/* ── Dock footer — theme capsule only, no outer frame ── */
+
+.cp-sidebar__dock-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 4px 2px;
+  border-top: 1px solid var(--cp-dock-divider);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .app-shell {
+    overflow: visible !important;
+  }
+
+  .cp-sidebar {
+    align-self: auto;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    justify-content: flex-start;
+  }
+
+  .cp-sidebar__dock {
+    max-height: none;
+  }
+
+  .cp-sidebar__rail {
+    max-height: none;
+    overflow: visible;
+  }
+}

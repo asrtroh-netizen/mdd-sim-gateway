@@ -1,0 +1,302 @@
+/**
+ * OneBord — 卡片文字系统（Typography Design System）
+ * 仅文字层级；布局 / 背景 / 结构由各组件自行维护。
+ */
+
+:root {
+  --card-t-primary-size: 14px;
+  --card-t-primary-size-compact: 13px;
+  --card-t-primary-weight: 600;
+  --card-t-primary-color: rgba(255, 255, 255, 0.9);
+  --card-t-primary-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+
+  --card-t-secondary-size: 12px;
+  --card-t-secondary-weight: 500;
+  --card-t-secondary-color: rgba(255, 255, 255, 0.62);
+
+  --card-t-meta-size: 11px;
+  --card-t-meta-weight: 500;
+  --card-t-meta-color: rgba(255, 255, 255, 0.58);
+
+  --card-t-metric-size: 15px;
+  --card-t-metric-weight: 600;
+  --card-t-metric-color: rgba(255, 255, 255, 0.92);
+  --card-t-metric-ok: #6ee7b7;
+  --card-t-metric-bad: #f87171;
+
+  --card-t-latency-color: #ffd84d;
+  --card-t-latency-weight: 600;
+  --card-t-latency-size: 12px;
+  --card-t-latency-size-compact: 11px;
+  --card-t-latency-glow: 0 0 8px rgba(255, 216, 77, 0.35);
+  --card-t-latency-border: rgba(255, 216, 77, 0.42);
+}
+
+/* ── 1️⃣ Primary ── */
+.cnc-title,
+.dcc-title,
+.rgc-title,
+.sub-provider-card__name,
+.sub-add-card__label,
+.semantic-visual-card .svc-title,
+.semantic-bucket-card .bucket-title,
+.rule-card .sub-name,
+.sub-card .sub-name,
+.add-card .add-name {
+  font-size: var(--card-t-primary-size);
+  font-weight: var(--card-t-primary-weight);
+  color: var(--card-t-primary-color);
+  letter-spacing: 0.02em;
+  text-shadow: var(--card-t-primary-shadow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.country-node-card.is-compact .cnc-title,
+.semantic-visual-card.is-compact .svc-title {
+  font-size: var(--card-t-primary-size-compact);
+}
+
+/* ── 2️⃣ Secondary ── */
+.cnc-code,
+.dcc-code,
+.rgc-count,
+.semantic-visual-card .svc-code,
+.rule-card .sub-code,
+.sub-card .sub-code,
+.add-card .add-code,
+.sub-provider-card__meta,
+.sub-provider-card__field dd,
+.semantic-bucket-card .bucket-desc,
+.semantic-bucket-card .bucket-tag,
+.semantic-bucket-card .bucket-outbound,
+.rule-card .meta-outbound,
+.sub-card .sub-meta > span:not(.sub-code):not(.meta-dot) {
+  font-size: var(--card-t-secondary-size);
+  font-weight: var(--card-t-secondary-weight);
+  color: var(--card-t-secondary-color);
+}
+
+.cnc-code,
+.dcc-code,
+.rgc-count,
+.semantic-visual-card .svc-code,
+.rule-card .sub-code,
+.sub-card .sub-code,
+.add-card .add-code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.cnc-effective:not(.empty) {
+  font-size: var(--card-t-meta-size);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-weight: 500;
+  color: var(--card-t-metric-ok);
+}
+
+.cnc-effective.empty {
+  font-size: var(--card-t-meta-size);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.sub-provider-card__field dt {
+  font-size: var(--card-t-meta-size);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.semantic-bucket-card .bucket-unit,
+.rule-card .sub-unit,
+.sub-card .sub-unit {
+  font-size: var(--card-t-meta-size);
+  font-weight: var(--card-t-meta-weight);
+  color: var(--card-t-meta-color);
+}
+
+/* ── 3️⃣ Meta ── */
+.cnc-sub,
+.dcc-sub,
+.semantic-visual-card .svc-sub,
+.semantic-bucket-card .bucket-hint,
+.add-card .add-meta,
+.sub-add-card__hint {
+  font-size: var(--card-t-meta-size);
+  font-weight: var(--card-t-meta-weight);
+  line-height: 1.5;
+  color: var(--card-t-meta-color);
+  letter-spacing: 0.02em;
+}
+
+.cnc-status,
+.dcc-status,
+.rgc-status,
+.semantic-visual-card .svc-status,
+.sub-provider-card__status {
+  font-size: var(--card-t-meta-size);
+  font-weight: 600;
+  color: var(--card-t-meta-color);
+}
+
+.cnc-status,
+.dcc-status,
+.rgc-status,
+.semantic-visual-card .svc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.cnc-status-dot,
+.dcc-status-dot,
+.rgc-status-dot,
+.semantic-visual-card .svc-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
+}
+
+.cnc-status.success,
+.cnc-status.active,
+.dcc-status.success,
+.rgc-status,
+.semantic-visual-card .svc-status.on,
+.semantic-visual-card .svc-status.effective,
+.sub-provider-card__status.is-ok {
+  color: var(--card-t-metric-ok);
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.32);
+}
+
+.cnc-status.error,
+.dcc-status.error,
+.semantic-visual-card .svc-status.off {
+  color: var(--card-t-metric-bad);
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.32);
+}
+
+.cnc-status.fallback {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.sub-provider-card__status.is-empty {
+  color: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.rule-card .sub-meta,
+.sub-card .sub-meta {
+  font-size: var(--card-t-meta-size);
+  color: var(--card-t-meta-color);
+}
+
+/* ── 4️⃣ Metric ── */
+.cnc-stat,
+.dcc-stat,
+.semantic-visual-card .svc-stat,
+.semantic-bucket-card .bucket-count,
+.rule-card .sub-count,
+.sub-card .sub-count {
+  font-size: var(--card-t-metric-size);
+  font-weight: var(--card-t-metric-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--card-t-metric-color);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+  line-height: 1.35;
+}
+
+.cnc-stat .avail,
+.dcc-stat .avail,
+.semantic-visual-card .svc-stat .avail {
+  color: var(--card-t-metric-ok);
+}
+
+.cnc-stat .sep,
+.dcc-stat .sep,
+.semantic-visual-card .svc-stat .sep {
+  opacity: 0.45;
+  margin: 0 2px;
+}
+
+.semantic-bucket-card .bucket-count {
+  color: #60a5fa;
+}
+
+.tint-0 .sub-count { color: #60a5fa; }
+.tint-1 .sub-count { color: #a78bfa; }
+.tint-2 .sub-count { color: #34d399; }
+.tint-3 .sub-count { color: #fb923c; }
+
+/* ── Latency / ms ── */
+.cnc-delay,
+.dcc-delay,
+.svc-delay,
+.cine-delay,
+.sub-delay {
+  font-size: var(--card-t-latency-size);
+  font-weight: var(--card-t-latency-weight);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--card-t-latency-color) !important;
+  text-shadow: var(--card-t-latency-glow);
+  border-color: var(--card-t-latency-border);
+}
+
+.country-node-card.is-compact .cnc-delay {
+  font-size: var(--card-t-latency-size-compact);
+}
+
+.ob-delay-fast,
+.ob-delay-warn,
+.ob-delay-slow {
+  color: var(--card-t-latency-color) !important;
+  text-shadow: var(--card-t-latency-glow);
+}
+
+.ob-delay-fast {
+  border-color: rgba(110, 231, 183, 0.45);
+}
+
+.ob-delay-warn {
+  border-color: var(--card-t-latency-border);
+}
+
+.ob-delay-slow {
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.semantic-bucket-card .bucket-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.rgc-chevron {
+  font-size: var(--card-t-primary-size);
+  font-weight: var(--card-t-primary-weight);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.rgc-chevron.open {
+  color: var(--card-t-metric-ok);
+}
+
+.semantic-visual-card .svc-action {
+  font-size: var(--card-t-meta-size);
+  font-weight: var(--card-t-metric-weight);
+  color: var(--card-t-metric-ok);
+}

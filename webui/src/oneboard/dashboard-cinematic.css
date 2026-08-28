@@ -1,0 +1,556 @@
+/**
+ * Dashboard — 深浅色共用布局（画布 + 卡片层）
+ * dashboard-shell 仅负责间距，不再叠第二层可见框
+ */
+
+.dashboard-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-grid, 14px);
+  min-height: 100%;
+  padding: 0;
+  margin: 0;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.dashboard-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-grid, 14px);
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.dashboard-shell .status-hero {
+  margin: 0 !important;
+  min-height: clamp(128px, 16vh, 172px) !important;
+}
+
+.dashboard-shell .status-hero__content {
+  min-height: clamp(128px, 16vh, 172px);
+}
+
+.dashboard-shell :is(.info-row, .country-grid) .panel-card {
+  border-radius: var(--radius-panel, 22px) !important;
+  padding: var(--panel-padding, 20px) !important;
+}
+
+.dashboard-shell :is(.info-row, .country-grid) .panel-head {
+  margin-bottom: 18px;
+}
+
+.dashboard-shell :is(.global-stats, .status-hero__layer--metrics) :is(.global-stat, .hero-metric).panel-card {
+  border-radius: var(--radius-card-sm, 14px) !important;
+  padding: 14px 16px !important;
+}
+
+.dashboard-shell .info-row .panel-btn {
+  margin-top: 16px;
+}
+
+.dashboard-shell :is(.info-row, .country-grid) .soft-label-card {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 0 !important;
+}
+
+.dashboard-shell :is(.info-row, .country-grid) .soft-label-card__title {
+  color: var(--text-muted);
+}
+
+.dashboard-shell :is(.info-row, .country-grid) .soft-label-card__value {
+  color: var(--text-primary);
+  font-weight: 400;
+}
+
+.dashboard-shell .traffic-chart-item {
+  padding: 12px 14px;
+  border-radius: var(--radius-card-sm);
+}
+
+.dashboard-shell .stat-row,
+.dashboard-shell .info-row {
+  display: grid;
+  gap: var(--space-grid, 14px);
+}
+
+.dashboard-shell .stat-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-shell .info-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1400px) {
+  .dashboard-shell .stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-shell .info-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 与 mobile 断点（900px）对齐：每张卡独占一行 */
+@media (max-width: 900px) {
+  .dashboard-shell .stat-row,
+  .dashboard-shell .info-row,
+  .dashboard-shell .country-grid,
+  .dashboard-shell .global-stats,
+  .dashboard-shell .traffic-charts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Dark ── */
+
+[data-theme='dark'] .dashboard {
+  --dash-card-bg: rgba(255, 255, 255, 0.075);
+  --dash-card-border: rgba(255, 255, 255, 0.11);
+  --dash-card-radius: 16px;
+  --dash-inner-bg: rgba(255, 255, 255, 0.05);
+  --dash-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] .layout:has(.dashboard) {
+  background: transparent;
+}
+
+[data-theme='dark'] .content:has(.dashboard) {
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 10px 12px 16px 8px !important;
+}
+
+[data-theme='dark'] .content:has(.dashboard) .content-inner {
+  padding: 0 !important;
+}
+
+[data-theme='dark'] .dashboard-shell {
+  --glass-shadow-inset: var(--dash-highlight);
+  --dcp-card-bg: var(--dash-card-bg);
+  --dcp-card-border: var(--dash-card-border);
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__title {
+  font-weight: 500;
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__metric-value {
+  font-weight: 500;
+}
+
+/* Hero 三指标 · 黑色容器 + 蓝青边缘光，降低绿色占比 */
+[data-theme='dark'] .dashboard-shell .status-hero__metric.glass-frame.glass-frame--tone-green {
+  --frame-base-top: rgba(28, 38, 52, 0.92);
+  --frame-base-bottom: rgba(18, 26, 38, 0.96);
+  --frame-veil-top: rgba(191, 219, 254, 0.028);
+  --frame-veil-bottom: rgba(0, 0, 0, 0.04);
+  --lens-wash: rgba(56, 189, 248, 0.022);
+  --corner-glow-a: rgba(56, 189, 248, 0.26);
+  --corner-glow-b: rgba(96, 165, 250, 0.1);
+  --corner-glow-c: rgba(45, 212, 191, 0.028);
+  color: inherit;
+  border-color: rgba(56, 189, 248, 0.26) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(147, 197, 253, 0.12),
+    inset 1px 0 0 rgba(56, 189, 248, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(56, 189, 248, 0.075),
+    0 0 30px rgba(56, 189, 248, 0.075),
+    0 10px 36px rgba(0, 0, 0, 0.42) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__metric.glass-frame.glass-frame--tone-green .status-hero__metric-value {
+  color: rgba(255, 255, 255, 0.94);
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__metric.glass-frame.glass-frame--tone-green .status-hero__metric-label {
+  color: rgba(186, 230, 253, 0.88);
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__metric.glass-frame.glass-frame--tone-green.is-pulse {
+  border-color: rgba(56, 189, 248, 0.32) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(147, 197, 253, 0.18),
+    inset 1px 0 0 rgba(56, 189, 248, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(56, 189, 248, 0.12),
+    0 0 42px rgba(56, 189, 248, 0.16),
+    0 12px 40px rgba(0, 0, 0, 0.44) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__metric.glass-frame.glass-frame--tone-green::before {
+  background: linear-gradient(
+    145deg,
+    rgba(147, 197, 253, 0.2) 0%,
+    rgba(56, 189, 248, 0.065) 28%,
+    rgba(255, 255, 255, 0.02) 52%,
+    rgba(45, 212, 191, 0.04) 100%
+  ) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero .ob-info-badge {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero .ob-info-badge--ready {
+  color: #34d399;
+  background: rgba(6, 42, 37, 0.44);
+  border-color: rgba(52, 211, 153, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(110, 231, 183, 0.14),
+    0 0 0 1px rgba(52, 211, 153, 0.1),
+    0 0 16px rgba(52, 211, 153, 0.12);
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero .ob-info-badge--ready .ob-info-badge__dot {
+  color: #34d399;
+  box-shadow: 0 0 8px currentColor;
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  color: #34d399;
+  background: rgba(6, 42, 37, 0.44);
+  border: 1px solid rgba(52, 211, 153, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(110, 231, 183, 0.14),
+    0 0 0 1px rgba(52, 211, 153, 0.1),
+    0 0 16px rgba(52, 211, 153, 0.12);
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__pill-dot {
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+[data-theme='dark'] .dashboard-shell .status-hero__pill--running,
+[data-theme='dark'] .dashboard-shell .status-hero__pill--muted.status-hero__pill--running {
+  color: #34d399;
+  background: rgba(6, 42, 37, 0.44);
+  border-color: rgba(52, 211, 153, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(110, 231, 183, 0.14),
+    0 0 0 1px rgba(52, 211, 153, 0.1),
+    0 0 16px rgba(52, 211, 153, 0.12);
+}
+
+[data-theme='dark'] .dashboard-shell .traffic-chart-item {
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: var(--dash-highlight), var(--gf-card-shadow, 0 10px 36px rgba(0, 0, 0, 0.42)) !important;
+}
+
+[data-theme='dark'] .dashboard-shell :is(.info-row, .country-grid, .global-stats, .status-hero__layer--metrics) :is(.panel-card.panel-blue, .hero-metric.panel-blue) {
+  --corner-glow-a: rgba(59, 130, 246, 0.28);
+  --corner-glow-b: rgba(59, 130, 246, 0.08);
+  --corner-glow-base: linear-gradient(165deg, rgba(14, 15, 22, 0.97) 0%, rgba(8, 9, 14, 0.99) 100%);
+  border-color: rgba(59, 130, 246, 0.2) !important;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(59, 130, 246, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.38) !important;
+}
+
+[data-theme='dark'] .dashboard-shell :is(.info-row, .country-grid, .global-stats, .status-hero__layer--metrics) :is(.panel-card.panel-purple, .hero-metric.panel-purple) {
+  --corner-glow-a: rgba(167, 139, 250, 0.26);
+  --corner-glow-b: rgba(167, 139, 250, 0.07);
+  --corner-glow-base: linear-gradient(165deg, rgba(18, 15, 24, 0.97) 0%, rgba(10, 8, 14, 0.99) 100%);
+  border-color: rgba(167, 139, 250, 0.2) !important;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(167, 139, 250, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.38) !important;
+}
+
+[data-theme='dark'] .dashboard-shell :is(.info-row, .country-grid, .global-stats, .status-hero__layer--metrics) :is(.panel-card.panel-green, .hero-metric.panel-green) {
+  --corner-glow-a: rgba(52, 211, 153, 0.24);
+  --corner-glow-b: rgba(52, 211, 153, 0.07);
+  --corner-glow-base: linear-gradient(165deg, rgba(12, 18, 16, 0.97) 0%, rgba(7, 11, 10, 0.99) 100%);
+  border-color: rgba(52, 211, 153, 0.2) !important;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(52, 211, 153, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.38) !important;
+}
+
+[data-theme='dark'] .dashboard-shell .vohive-console {
+  margin-top: 0;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Light ── */
+
+[data-theme='light'] .dashboard {
+  --dash-canvas-bg:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(147, 197, 253, 0.14) 0%, transparent 58%),
+    linear-gradient(180deg, #eef2ff 0%, #f5f3ff 48%, #fdf4ff 100%);
+  --dash-inner-bg: rgba(255, 255, 255, 0.34);
+  --dash-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+[data-theme='light'] body:has(.dashboard) {
+  background: var(--dash-canvas-bg) !important;
+}
+
+[data-theme='light'] .content:has(.dashboard) {
+  background: transparent !important;
+  padding: 10px 12px 16px 8px !important;
+}
+
+[data-theme='light'] .content:has(.dashboard) .content-inner {
+  padding: 0 !important;
+}
+
+[data-theme='light'] .dashboard-shell .vohive-console::before,
+[data-theme='light'] .dashboard-shell .vohive-console::after {
+  display: none !important;
+}
+
+[data-theme='light'] .dashboard-shell .traffic-chart-item {
+  background: transparent !important;
+  border: 1px solid var(--ob-glass-border, rgba(255, 255, 255, 0.42)) !important;
+  box-shadow: var(--ob-glass-shadow, 0 8px 32px rgba(15, 23, 42, 0.06)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-theme='light'] .dashboard-shell .status-hero__metric.glass-frame.glass-frame--tone-green {
+  background: rgba(255, 255, 255, 0.52) !important;
+  border-color: rgba(5, 150, 105, 0.2) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 0 0 1px rgba(5, 150, 105, 0.08),
+    0 0 24px rgba(52, 211, 153, 0.1),
+    0 4px 16px rgba(15, 23, 42, 0.06) !important;
+}
+
+[data-theme='light'] .dashboard-shell .status-hero__metric.glass-frame.glass-frame--tone-green .status-hero__metric-label {
+  color: rgba(5, 150, 105, 0.72);
+}
+
+[data-theme='light'] .dashboard-shell .status-hero__metric.glass-frame.glass-frame--tone-green.is-pulse {
+  border-color: rgba(5, 150, 105, 0.32) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 1px rgba(5, 150, 105, 0.12),
+    0 0 32px rgba(52, 211, 153, 0.16),
+    0 6px 20px rgba(15, 23, 42, 0.08) !important;
+}
+
+[data-theme='light'] .dashboard-shell :is(.info-row, .country-grid) .panel-icon {
+  background: rgba(255, 255, 255, 0.55) !important;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72) !important;
+}
+
+/* 统计行 · 与 dark deep-control-panel 同结构 */
+[data-theme='light'] .dashboard-body > .stat-row:first-of-type .factory-value {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--stat-value-color);
+}
+
+[data-theme='light'] .dashboard-body > .stat-row:first-of-type .factory-label,
+[data-theme='light'] .dashboard-body > .stat-row:first-of-type .factory-sub {
+  color: var(--stat-label-color);
+}
+
+[data-theme='light'] .dashboard-body > .stat-row:nth-of-type(2) .factory-value {
+  font-size: 21px;
+  font-weight: 400;
+  color: var(--stat-value-color);
+  letter-spacing: -0.01em;
+}
+
+[data-theme='light'] .dashboard-body > .stat-row:nth-of-type(2) .factory-label {
+  color: var(--stat-label-color);
+}
+
+[data-theme='dark'] .dashboard-body > .stat-row:first-of-type .factory-value {
+  font-size: 15px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+[data-theme='dark'] .dashboard-body > .stat-row:first-of-type .factory-label,
+[data-theme='dark'] .dashboard-body > .stat-row:first-of-type .factory-sub {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+[data-theme='dark'] .dashboard-body > .stat-row:first-of-type .factory-chart {
+  opacity: 0.45;
+}
+
+[data-theme='dark'] .dashboard-body > .stat-row:nth-of-type(2) .factory-value {
+  font-size: 21px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+[data-theme='dark'] .dashboard-body > .stat-row:nth-of-type(2) .factory-label {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── 活框体：Dashboard 全域玻璃（深浅色） ── */
+
+.dashboard-shell :is(
+  .panel-card,
+  .section-card,
+  .factory-card,
+  .glass-stat,
+  .traffic-chart-item,
+  .global-stat,
+  .status-hero
+) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.dashboard-shell .traffic-chart-item,
+.dashboard-shell .global-stat {
+  border-radius: var(--radius-card-sm, 12px) !important;
+}
+
+.dashboard-shell .global-stats .global-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 72px;
+}
+
+.dashboard-shell .global-stats .global-label {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  color: rgba(148, 163, 184, 0.78);
+}
+
+.dashboard-shell .global-stats .global-value {
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme='light'] .dashboard-shell .status-hero.panel-card::before,
+[data-theme='light'] .dashboard-shell .status-hero.panel-card::after {
+  display: block !important;
+}
+
+[data-theme='light'] .dashboard-shell .status-hero.panel-card::before {
+  content: '' !important;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--cg-glass-hero, var(--cg-glass-card));
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+  -webkit-mask: none;
+  mask: none;
+  padding: 0;
+}
+
+[data-theme='light'] .dashboard-shell .status-hero.panel-card::after {
+  content: '' !important;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--mat-leak-opacity);
+  background: var(--cg-leak-neutral);
+  mix-blend-mode: normal;
+}
+
+[data-theme='light'] .dashboard-shell .status-hero.panel-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+[data-theme='light'] .dashboard-shell .glass-frame {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: transparent !important;
+  border: 1px solid var(--mat-border) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-theme='light'] .dashboard-shell .glass-frame::before {
+  content: '' !important;
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--cg-glass-inner, var(--mat-inner-bg));
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+  -webkit-mask: none;
+  mask: none;
+  padding: 0;
+}
+
+[data-theme='light'] .dashboard-shell .glass-frame::after {
+  content: '' !important;
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--mat-leak-opacity);
+  background: var(--cg-leak-blue);
+  mix-blend-mode: normal;
+}
+
+[data-theme='light'] .dashboard-shell .glass-frame.glass-frame--tone-green::after {
+  background: var(--cg-leak-teal);
+}
+
+[data-theme='light'] .dashboard-shell .glass-frame > * {
+  position: relative;
+  z-index: 2;
+}
+
+[data-theme='dark'] .dashboard-shell .traffic-chart-item {
+  --corner-glow-a: rgba(56, 189, 248, 0.14);
+  --corner-glow-b: rgba(56, 189, 248, 0.042);
+  --corner-glow-c: rgba(56, 189, 248, 0.012);
+}
+
+[data-theme='dark'] .dashboard-shell .global-stat {
+  --corner-glow-a: rgba(167, 139, 250, 0.12);
+  --corner-glow-b: rgba(167, 139, 250, 0.036);
+  --corner-glow-c: rgba(167, 139, 250, 0.01);
+}

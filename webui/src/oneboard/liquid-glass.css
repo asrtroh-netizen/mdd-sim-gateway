@@ -1,0 +1,429 @@
+/**
+ * OneBoard Liquid Glass Layer — iOS 26 流体玻璃 · 移动端悬浮导航
+ *
+ * 对照 Apple WWDC25「Liquid Glass」核心特征做 Web 等价实现：
+ *  - 折射环境：backdrop-filter blur + 高饱和 saturate（透出并放大身后内容的色彩）
+ *  - 镜面高光：inset 顶部 1px 亮线 + 顶缘 radial 光晕（specular highlight）
+ *  - 边缘透镜：1px 半透明描边 + 内圈渐变 rim（lensing）
+ *  - 内容优先：底部 Tab 栏悬浮于内容之上，下滑收缩、上滑回弹
+ *  - 流动形变：sheet 从栏体涌出，spring 缓动
+ *
+ * 仅移动端（≤900px）挂载组件；材质类全局可复用。
+ * 降级链：无 backdrop-filter → 实底；reduce-transparency → 实底；reduce-motion → 仅淡入淡出。
+ */
+
+/* ── 材质 tokens ── */
+
+:root {
+  --lg-blur: 24px;
+  --lg-saturate: 180%;
+  --lg-radius: 30px;
+  --lg-tab-accent: var(--accent, #8ab4f8);
+  /* 底部悬浮栏为内容让出的高度：栏高 + 底部安全区悬浮间距 */
+  --lg-tabbar-clearance: calc(76px + max(12px, env(safe-area-inset-bottom)));
+}
+
+[data-theme='dark'] {
+  --lg-surface:
+    radial-gradient(140% 90% at 50% -30%, rgba(148, 180, 248, 0.1) 0%, transparent 55%),
+    linear-gradient(155deg, rgba(44, 54, 74, 0.6) 0%, rgba(20, 26, 40, 0.66) 100%);
+  --lg-surface-solid: #1a2232;
+  --lg-border: rgba(255, 255, 255, 0.15);
+  --lg-specular: rgba(255, 255, 255, 0.24);
+  --lg-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.5),
+    0 2px 10px rgba(0, 0, 0, 0.32);
+  --lg-text: rgba(226, 232, 240, 0.78);
+  --lg-text-active: #dbeafe;
+  --lg-pill: rgba(148, 180, 248, 0.16);
+  --lg-pill-border: rgba(148, 180, 248, 0.3);
+  --lg-sheet-scrim: rgba(2, 4, 12, 0.44);
+}
+
+[data-theme='light'] {
+  --lg-surface:
+    radial-gradient(140% 90% at 50% -30%, rgba(255, 255, 255, 0.85) 0%, transparent 60%),
+    linear-gradient(155deg, rgba(255, 255, 255, 0.62) 0%, rgba(244, 248, 255, 0.55) 100%);
+  --lg-surface-solid: #f0f4ff;
+  --lg-border: rgba(255, 255, 255, 0.65);
+  --lg-specular: rgba(255, 255, 255, 0.95);
+  --lg-shadow:
+    0 18px 44px rgba(71, 85, 125, 0.22),
+    0 2px 10px rgba(71, 85, 125, 0.1);
+  --lg-text: rgba(51, 65, 85, 0.72);
+  --lg-text-active: #1d4ed8;
+  --lg-pill: rgba(255, 255, 255, 0.85);
+  --lg-pill-border: rgba(79, 140, 255, 0.28);
+  --lg-sheet-scrim: rgba(30, 41, 59, 0.3);
+}
+
+/* ── 流体玻璃基础材质（可复用） ── */
+
+.lg-material {
+  position: relative;
+  isolation: isolate;
+  background: var(--lg-surface);
+  border: 1px solid var(--lg-border);
+  box-shadow:
+    var(--lg-shadow),
+    inset 0 1px 0 var(--lg-specular),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+}
+
+/* 边缘透镜 rim：内圈一层随圆角的渐变光环，模拟玻璃厚度折射 */
+.lg-material::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 65% at 50% -12%, rgba(255, 255, 255, 0.16) 0%, transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, transparent 34%);
+}
+
+[data-theme='light'] .lg-material::before {
+  background:
+    radial-gradient(120% 65% at 50% -12%, rgba(255, 255, 255, 0.9) 0%, transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, transparent 34%);
+}
+
+/* ── 底部悬浮 Tab 栏（iOS 26 floating tab bar） ── */
+
+.lg-tabbar {
+  position: fixed;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 90;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  width: min(430px, calc(100vw - 24px));
+  padding: 6px;
+  border-radius: var(--lg-radius);
+  transform: translateX(-50%);
+  /* Apple 风格 spring：轻微过冲回弹 */
+  transition:
+    transform 0.44s cubic-bezier(0.34, 1.16, 0.4, 1),
+    opacity 0.3s ease;
+  will-change: transform;
+}
+
+/* 下滑收缩态：沉降 + 缩小 + 标签隐去，把舞台还给内容 */
+.lg-tabbar--min {
+  transform: translateX(-50%) translateY(14px) scale(0.82);
+  opacity: 0.92;
+}
+
+.lg-tabbar--hidden {
+  transform: translateX(-50%) translateY(140%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 抽屉打开时：底栏让出命中（避免 iOS 上 fixed+transform 叠在 sheet 底部菜单之上） */
+.lg-tabbar--sheet-open {
+  pointer-events: none;
+  z-index: 80;
+}
+
+.lg-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 52px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--lg-radius) - 6px);
+  background: transparent;
+  color: var(--lg-text);
+  font-size: 10.5px;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 0.24s ease,
+    background 0.24s ease,
+    border-color 0.24s ease,
+    transform 0.24s ease;
+}
+
+.lg-tab:active {
+  transform: scale(0.94);
+}
+
+.lg-tab .ob-icon {
+  flex-shrink: 0;
+}
+
+.lg-tab__label {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: opacity 0.2s ease, max-height 0.2s ease;
+}
+
+/* 收缩态只留图标，进一步瘦身 */
+.lg-tabbar--min .lg-tab {
+  min-height: 44px;
+}
+
+.lg-tabbar--min .lg-tab__label {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* 选中项：玻璃小药丸浮起 + 主题色点亮（iOS 26 selected pill） */
+.lg-tab.active {
+  color: var(--lg-text-active);
+  background: var(--lg-pill);
+  border-color: var(--lg-pill-border);
+  box-shadow: inset 0 1px 0 var(--lg-specular);
+}
+
+.lg-tab:focus-visible {
+  outline: 2px solid var(--lg-tab-accent);
+  outline-offset: -2px;
+}
+
+/* ── 「更多」流体抽屉（Liquid Glass sheet） ── */
+
+.lg-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--lg-sheet-scrim);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.lg-sheet {
+  width: min(520px, 100%);
+  margin: 0 12px;
+  margin-bottom: calc(var(--lg-tabbar-clearance) + 6px);
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom) * 0.3);
+  border-radius: 30px;
+  transform-origin: 50% 100%;
+  /*
+   * 勿在带 backdrop-filter 的同一层开 overflow 滚动：
+   * iOS Safari 会出现「只有部分子按钮可点」的命中黑洞。
+   */
+  overflow: visible;
+}
+
+.lg-sheet__handle {
+  width: 38px;
+  height: 4px;
+  margin: 2px auto 10px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.22;
+}
+
+.lg-sheet__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lg-sheet__item {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 4px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--lg-text);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 1.1;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: color 0.22s ease, background 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+}
+
+.lg-sheet__item .ob-icon,
+.lg-sheet__aux-btn .ob-icon {
+  pointer-events: none;
+}
+
+.lg-sheet__item:active {
+  transform: scale(0.95);
+}
+
+.lg-sheet__item.active {
+  color: var(--lg-text-active);
+  background: var(--lg-pill);
+  border-color: var(--lg-pill-border);
+}
+
+.lg-sheet__divider {
+  height: 1px;
+  margin: 10px 4px;
+  background: currentColor;
+  opacity: 0.12;
+}
+
+.lg-sheet__aux {
+  display: flex;
+  gap: 8px;
+}
+
+.lg-sheet__aux-btn {
+  position: relative;
+  z-index: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lg-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: color 0.22s ease, background 0.22s ease;
+}
+
+.lg-sheet__aux-btn:active {
+  background: var(--lg-pill);
+}
+
+.lg-sheet__aux-btn--danger {
+  color: #f87171;
+}
+
+[data-theme='light'] .lg-sheet__aux-btn--danger {
+  color: #dc2626;
+}
+
+/* sheet 涌出/收回：从底栏位置流体生长 */
+.lg-sheet-pop-enter-active {
+  transition: opacity 0.28s ease;
+}
+
+.lg-sheet-pop-leave-active {
+  transition: opacity 0.22s ease;
+}
+
+.lg-sheet-pop-enter-active .lg-sheet {
+  transition: transform 0.42s cubic-bezier(0.34, 1.2, 0.4, 1);
+}
+
+.lg-sheet-pop-leave-active .lg-sheet {
+  transition: transform 0.26s cubic-bezier(0.5, 0, 0.75, 0.4);
+}
+
+.lg-sheet-pop-enter-from,
+.lg-sheet-pop-leave-to {
+  opacity: 0;
+}
+
+.lg-sheet-pop-enter-from .lg-sheet,
+.lg-sheet-pop-leave-to .lg-sheet {
+  transform: translateY(28%) scale(0.86);
+}
+
+/* ── 顶部身份坞同步换装流体玻璃（仅移动端生效，选择器在 mobile.css 中约束尺寸） ── */
+
+@media (max-width: 900px) {
+  .cp-sidebar__dock {
+    background: var(--lg-surface);
+    border: 1px solid var(--lg-border);
+    box-shadow:
+      var(--lg-shadow),
+      inset 0 1px 0 var(--lg-specular);
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+  }
+}
+
+/* ── 降级链 ── */
+
+/* 不支持 backdrop-filter：实底保可读 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lg-material {
+    background: var(--lg-surface-solid);
+  }
+
+  .lg-sheet-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* 用户开启「降低透明度」：尊重系统偏好，改实底 */
+@media (prefers-reduced-transparency: reduce) {
+  .lg-material {
+    background: var(--lg-surface-solid);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* 用户开启「减弱动态效果」：去位移/缩放，仅保留透明度过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .lg-tabbar,
+  .lg-tab,
+  .lg-sheet-pop-enter-active .lg-sheet,
+  .lg-sheet-pop-leave-active .lg-sheet {
+    transition-duration: 0.01ms;
+  }
+
+  .lg-tabbar--min {
+    transform: translateX(-50%);
+    opacity: 1;
+  }
+
+  .lg-sheet-pop-enter-from .lg-sheet,
+  .lg-sheet-pop-leave-to .lg-sheet {
+    transform: none;
+  }
+}
+
+/* 桌面端彻底隐藏（组件也只在移动断点渲染，双保险） */
+@media (min-width: 901px) {
+  .lg-tabbar,
+  .lg-sheet-backdrop {
+    display: none !important;
+  }
+}
