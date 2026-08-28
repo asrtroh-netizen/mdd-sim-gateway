@@ -6,6 +6,7 @@ import Esim from './views/Esim.jsx'
 import Keepalive from './views/Keepalive.jsx'
 import { UnifiedOverview, DevicesPage, EgressPage, NotificationsPage, SystemPage, DiagnosticsPage } from './views/UnifiedPages.jsx'
 import { useI18n } from './i18n.jsx'
+import { isUiPreview, previewAuth, previewCards, previewDevices, previewInstances, previewSystemMeta } from './previewFixtures.js'
 
 const NAV = [
   ['overview', 'Overview', '⌂'], ['devices', 'Devices', '▣'], ['calls', 'Calls', '☎'],
@@ -111,7 +112,7 @@ export default function App() {
   const [discovering, setDiscovering] = useState(true)
   const [selected, setSelected] = useState(null); const [toast, setToast] = useState(null)
   const [selectedDeviceId, setSelectedDeviceId] = useState(null)
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'auto')
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [systemMeta, setSystemMeta] = useState({ version: '', repository_url: '' })
   const [updateOpen, setUpdateOpen] = useState(false)
   const [authState, setAuthState] = useState(null)
@@ -139,6 +140,14 @@ export default function App() {
   },[])
 
   const refresh = useCallback(async () => {
+    if (isUiPreview()) {
+      setInstances(previewInstances)
+      setCards(previewCards)
+      setDevices(previewDevices)
+      setDiscovering(false)
+      unifiedAvailable.current = true
+      return
+    }
     if (refreshInFlight.current) return
     refreshInFlight.current = true
     try {
@@ -172,7 +181,15 @@ export default function App() {
     window.addEventListener('mdd-auth-expired',expireAuth)
     return()=>window.removeEventListener('mdd-auth-expired',expireAuth)
   },[expireAuth])
-  useEffect(()=>{ api.authStatus().then(s=>{ setCsrf(s.csrf); setAuthState(s) }).catch(()=>setAuthState({configured:true,authenticated:false})) },[])
+  useEffect(()=>{
+    if (isUiPreview()) {
+      setCsrf(previewAuth.csrf)
+      setAuthState(previewAuth)
+      setSystemMeta(s => ({ ...s, ...previewSystemMeta }))
+      return
+    }
+    api.authStatus().then(s=>{ setCsrf(s.csrf); setAuthState(s) }).catch(()=>setAuthState({configured:true,authenticated:false}))
+  },[])
   useEffect(()=>{ if(authState?.authenticated) refresh() },[authState?.authenticated]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{ if(!authState?.authenticated)return;
     // Status refreshes must retain release/repository metadata loaded by separate requests.
@@ -189,7 +206,7 @@ export default function App() {
   }).catch(()=>{})},[authState?.authenticated,showToast,t])
   useEffect(()=>{ if(!authState?.authenticated)return; const timer=setInterval(refresh,10000); return()=>clearInterval(timer) },[refresh,authState?.authenticated])
 
-  useEffect(()=>{ if(!authState?.authenticated)return; return connectWs(msg=>{
+  useEffect(()=>{ if(!authState?.authenticated || isUiPreview())return; return connectWs(msg=>{
     if(msg.type==='status'){
       const status=Object.fromEntries(Object.entries(msg).filter(([k])=>!['type','instance'].includes(k)))
       setInstances(list=>list.map(i=>String(i.id)===String(msg.instance)?{...i,status}:i))

@@ -4,6 +4,36 @@ import { useI18n } from '../i18n.jsx'
 import SimConfig from './SimConfig.jsx'
 import Logs from './Logs.jsx'
 import VowifiHistory from './VowifiHistory.jsx'
+import { isUiPreview, previewSettings, previewStatus } from '../previewFixtures.js'
+
+const FLAG_FILES = new Set(['gb', 'us'])
+const FLAG_NAMES = [
+  [/united kingdom|great britain|\buk\b|\bgb\b|england|scotland|wales|london|britain/, 'gb'],
+  [/united states|\busa\b|\bus\b|america|new york|washington|california/, 'us'],
+]
+
+function flagCodeFor(device) {
+  const sources = [
+    device?.egress?.detected_country, device?.egress?.country, device?.egress?.node,
+    device?.sim?.country, device?.country,
+  ]
+  for (const src of sources) {
+    if (src == null || src === '') continue
+    const s = String(src).trim().toLowerCase()
+    if (s === 'uk') return 'gb'
+    if (/^[a-z]{2}$/.test(s)) return FLAG_FILES.has(s) ? s : ''
+    for (const [re, code] of FLAG_NAMES) {
+      if (re.test(s)) return code
+    }
+  }
+  return ''
+}
+
+function FlagMark({ device }) {
+  const code = flagCodeFor(device)
+  if (!code) return null
+  return <span className="u-flag-mark" aria-hidden><img src={`/flags/${code}.svg`} alt="" /></span>
+}
 
 const CAP_STATES = ['off', 'starting', 'on', 'stopping', 'degraded', 'error', 'unsupported']
 
@@ -417,7 +447,7 @@ export function UnifiedOverview({ devices, discovering, refreshDevices, setView,
     {pending ? <Discovering t={t} /> :
       !devices.length ? <Empty title={t('No communication devices found')} detail={t('Connect a modem or smart-card reader. Discovery updates automatically.')} /> :
       <div className="u-device-grid">{devices.map((d, i) => <div className="card u-device-card" key={d.id}>
-        <div className="u-card-head"><div><h2>{deviceTitle(d, i)}</h2><p>{deviceIdentityLine(d, t)}</p></div><Badge state={d.present === false ? 'error' : 'on'}>{d.present === false ? t('Offline') : t('Detected')}</Badge></div>
+        <div className="u-card-head"><div className="u-card-title"><FlagMark device={d} /><div><h2>{deviceTitle(d, i)}</h2><p>{deviceIdentityLine(d, t)}</p></div></div><Badge state={d.present === false ? 'error' : 'on'}>{d.present === false ? t('Offline') : t('Detected')}</Badge></div>
         <div className="u-card-body">{supportsCellular(d) && <CapabilitySwitch device={d} kind="cellular" compact onChanged={refreshDevices} showToast={showToast} />}<CapabilitySwitch device={d} kind="vowifi" compact onChanged={refreshDevices} showToast={showToast} /><LineActivity device={d} compact />{capability(d, 'vowifi').desired && <VowifiHistory instanceId={d.instance_id} subscribe={subscribe} compact />}
           <div className="u-details"><div className="u-detail"><span>{t('Carrier')}</span><b>{carrierLabel(d, t)}</b></div>{d.cellular?.rsrp != null && <div className="u-detail"><span>RSRP</span><b>{d.cellular.rsrp} dBm</b></div>}<div className="u-detail"><span>{t('Country exit')}</span><b className="u-proxy-node-text"><ProxyNodeName text={exitNodeLabel(d, t) || d.proxy_node || t('Not connected')} /></b></div></div>
         </div><div className="u-card-foot"><button className="btn btn-ghost" onClick={() => { if (d.instance_id) setSelected(String(d.instance_id)); setView('calls') }}>{t('Call')}</button><button className="btn btn-ghost" onClick={() => { if (d.instance_id) setSelected(String(d.instance_id)); setView('messages') }}>{t('Message')}</button><button className="btn btn-primary" onClick={() => { setSelectedDeviceId(d.id); setView('devices') }}>{t('Details')}</button></div>
@@ -433,8 +463,8 @@ export function DevicesPage({ devices, discovering, refreshDevices, instances, c
   useEffect(() => { if (d && !supportsCellular(d) && tab === 'cellular') setTab('status') }, [d, tab])
   if (!d) return discovering ? <Discovering t={t} /> : <Empty title={t('No communication devices found')} detail={t('Connect a modem or smart-card reader. Discovery updates automatically.')} />
   const tabs = [['status',t('Status')],['sim','SIM'],...(supportsCellular(d) ? [['cellular',t('4G network')]] : []),['vowifi','VoWiFi'],['hardware',t('Hardware')]]
-  return <div className="u-split"><aside className="card u-device-list">{devices.map((x,i)=><button key={x.id} className={`u-device-option ${x.id===active?'active':''}`} onClick={()=>setSelectedDeviceId(x.id)}><b className="u-device-option-name">{deviceTitle(x,i)}</b><span className="u-device-option-sim">{deviceSimLine(x, t, language)}</span><span className="u-device-option-status"><Badge state={x.present === false ? 'error' : capability(x,'vowifi').actual} /></span></button>)}</aside>
-    <section className="u-page"><div className="u-page-heading"><div><h2>{deviceTitle(d, devices.indexOf(d))}</h2><p>{deviceTypeName(d, t)} · {stablePathName(d, t)}</p></div></div><div className="u-tabs">{tabs.map(([k,l])=><button key={k} className={tab===k?'active':''} onClick={()=>setTab(k)}>{l}</button>)}</div>
+  return <div className="u-split"><aside className="card u-device-list">{devices.map((x,i)=><button key={x.id} className={`u-device-option ${x.id===active?'active':''}`} onClick={()=>setSelectedDeviceId(x.id)}><b className="u-device-option-name"><FlagMark device={x} />{deviceTitle(x,i)}</b><span className="u-device-option-sim">{deviceSimLine(x, t, language)}</span><span className="u-device-option-status"><Badge state={x.present === false ? 'error' : capability(x,'vowifi').actual} /></span></button>)}</aside>
+    <section className="u-page"><div className="u-page-heading"><div className="u-card-title"><FlagMark device={d} /><div><h2>{deviceTitle(d, devices.indexOf(d))}</h2><p>{deviceTypeName(d, t)} · {stablePathName(d, t)}</p></div></div></div><div className="u-tabs">{tabs.map(([k,l])=><button key={k} className={tab===k?'active':''} onClick={()=>setTab(k)}>{l}</button>)}</div>
       {tab==='status' && <div className="card u-panel">{supportsCellular(d) ? <><CapabilitySwitch device={d} kind="cellular" onChanged={refreshDevices} showToast={showToast}/><CapabilitySwitch device={d} kind="flight" onChanged={refreshDevices} showToast={showToast}/></> : <p className="u-note">{t('This is a smart-card reader. It provides SIM access for VoWiFi and has no 4G radio.')}</p>}<CapabilitySwitch device={d} kind="vowifi" onChanged={refreshDevices} showToast={showToast}/><LineActivity device={d}/><p className="u-note">{t('Cellular data, flight mode and VoWiFi are independent controls. Flight mode disables modem RF; the 4G switch only connects or disconnects mobile data.')}</p><p className="u-note">{t('Software support means the technical path is implemented. Actual availability still depends on the SIM plan, carrier, region, modem firmware and device-identity policy.')}</p></div>}
       {tab==='sim' && <div className="card u-panel"><SimConfig instances={instances} selected={selected} refresh={refresh} cards={cards} setSelected={setSelected} targetDevice={d}/></div>}
       {tab==='cellular' && <div className="card u-panel"><h3>{t('4G network')}</h3>{d.cellular ? <div className="u-details cols"><div className="u-detail"><span>{t('Registration')}</span><b>{d.cellular.registration || t('Not connected')}</b></div><div className="u-detail"><span>{t('Operator')}</span><b>{d.cellular.operator || t('Not connected')}</b></div><div className="u-detail"><span>APN</span><b>{d.cellular.apn || t('Automatic')}</b></div><div className="u-detail"><span>{t('IP address')}</span><b>{d.cellular.ip || t('Waiting')}</b></div><div className="u-detail"><span>{t('Signal')}</span><b>{d.cellular.signal == null ? t('Waiting') : `${d.cellular.signal}%`}</b></div><div className="u-detail"><span>RSRP</span><b>{d.cellular.rsrp == null ? t('Waiting') : `${d.cellular.rsrp} dBm`}</b></div><div className="u-detail"><span>RSRQ</span><b>{d.cellular.rsrq == null ? t('Waiting') : `${d.cellular.rsrq} dB`}</b></div><div className="u-detail"><span>SINR</span><b>{d.cellular.sinr == null ? t('Waiting') : `${d.cellular.sinr} dB`}</b></div><div className="u-detail"><span>{t('Access technology')}</span><b>{d.cellular.access_tech || t('Waiting')}</b></div><div className="u-detail"><span>{t('Band')}</span><b>{d.cellular.band || t('Waiting')}</b></div><div className="u-detail"><span>{t('Channel')}</span><b>{d.cellular.channel == null ? t('Waiting') : d.cellular.channel}</b></div><div className="u-detail"><span>{t('Traffic')}</span><b>↓ {formatBytes(d.cellular.rx_bytes)} · ↑ {formatBytes(d.cellular.tx_bytes)}</b></div><div className="u-detail"><span>{t('Data profile')}</span><b>{d.cellular.profile || t('Automatic')}</b></div><div className="u-detail"><span>{t('Network interface')}</span><b>{d.cellular.interface || t('Waiting')}</b></div></div>:<Empty title={t('Cellular data not connected')} detail={t('Turn on 4G to let the per-device ModemManager backend establish a data bearer.')} />}<ModemEngineeringPanel device={d} refreshDevices={refreshDevices} showToast={showToast} /></div>}
@@ -686,8 +716,14 @@ export function NotificationsPage({ showToast }) {
 
 export function SystemPage({ showToast, openUpdateDialog }) {
   const { t, language, setLanguage } = useI18n(); const [s, setS] = useState(null); const [tab, setTab] = useState('general'); const [status, setStatus] = useState(null); const [update,setUpdate]=useState(null); const [checking,setChecking]=useState(false); const [passwordForm,setPasswordForm]=useState({current:'',next:'',confirm:''}); const [restarting,setRestarting]=useState(null)
-  const loadStatus = () => api.systemStatus().then(setStatus).catch(() => setStatus(null))
-  useEffect(() => { api.settings().then(setS).catch(() => setS({ tls: {}, retry: {}, rekey: {}, security: {}, device_defaults: {}, updates: { proxy_mode: 'auto' }, proxy: { profiles: {}, exits: {} } })); loadStatus() }, [])
+  const loadStatus = () => {
+    if (isUiPreview()) { setStatus(previewStatus); return }
+    api.systemStatus().then(setStatus).catch(() => setStatus(null))
+  }
+  useEffect(() => {
+    if (isUiPreview()) { setS(previewSettings); setStatus(previewStatus); return }
+    api.settings().then(setS).catch(() => setS({ tls: {}, retry: {}, rekey: {}, security: {}, device_defaults: {}, updates: { proxy_mode: 'auto' }, proxy: { profiles: {}, exits: {} } })); loadStatus()
+  }, [])
   useEffect(() => {
     if (!restarting) return
     let stop = false, wentDown = false
